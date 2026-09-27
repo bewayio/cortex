@@ -1,0 +1,300 @@
+{
+  "bsdd_version": "1.0",
+  "generated_at": "2026-09-26T00:00:00Z",
+  "project": {
+    "name": "BCode",
+    "dna": ".specs/project/project-dna.md",
+    "vision": ".specs/project/vision.md",
+    "architecture": ".specs/architecture/overview.md"
+  },
+  "domains": {
+    "areas": [
+      ".specs/areas/desktop-window.md"
+    ],
+    "modules": [
+      ".specs/modules/chat.md",
+      ".specs/modules/database.md",
+      ".specs/modules/files.md",
+      ".specs/modules/git.md",
+      ".specs/modules/shell.md",
+      ".specs/modules/terminal.md",
+      ".specs/modules/usage.md",
+      ".specs/modules/workspace.md"
+    ],
+    "entities": [],
+    "adrs": [
+      ".specs/adrs/0001-wails-desktop-shell.md",
+      ".specs/adrs/0002-local-json-persistence.md",
+      ".specs/adrs/0003-claude-cli-with-sdk-fallback.md",
+      ".specs/adrs/0004-pty-terminal.md",
+      ".specs/adrs/0005-git-cli-subprocess.md",
+      ".specs/adrs/0006-single-user-local-scope.md",
+      ".specs/adrs/0007-unified-window-chrome.md",
+      ".specs/adrs/0008-terminal-raw-paste-passthrough.md",
+      ".specs/adrs/0009-mysql-client.md"
+    ],
+    "tasks": [
+      ".specs/tasks/home-icon-and-closed-projects.md",
+      ".specs/tasks/initial-setup.md",
+      ".specs/tasks/mysql-query-tabs.md",
+      ".specs/tasks/sidebar-usage-panel.md",
+      ".specs/tasks/terminal-image-paste.md",
+      ".specs/tasks/terminal-plain-only.md",
+      ".specs/tasks/terminal-shift-enter.md",
+      ".specs/tasks/unified-window-chrome.md"
+    ],
+    "reviews": [],
+    "ui": [
+      ".specs/ui/design-direction.md"
+    ]
+  },
+  "reading_order": [
+    ".specs/project/project-dna.md",
+    ".specs/project/vision.md",
+    ".specs/architecture/overview.md",
+    ".specs/areas/desktop-window.md"
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "id": "architecture-overview",
+        "path": ".specs/architecture/overview.md",
+        "domain": "architecture",
+        "document_type": "source"
+      },
+      {
+        "id": "areas-desktop-window",
+        "path": ".specs/areas/desktop-window.md",
+        "domain": "areas",
+        "document_type": "source"
+      },
+      {
+        "id": "modules-chat",
+        "path": ".specs/modules/chat.md",
+        "domain": "modules",
+        "document_type": "source"
+      },
+      {
+        "id": "modules-database",
+        "path": ".specs/modules/database.md",
+        "domain": "modules",
+        "document_type": "source"
+      },
+      {
+        "id": "modules-files",
+        "path": ".specs/modules/files.md",
+        "domain": "modules",
+        "document_type": "source"
+      },
+      {
+        "id": "modules-git",
+        "path": ".specs/modules/git.md",
+        "domain": "modules",
+        "document_type": "source"
+      },
+      {
+        "id": "modules-shell",
+        "path": ".specs/modules/shell.md",
+        "domain": "modules",
+        "document_type": "source"
+      },
+      {
+        "id": "modules-terminal",
+        "path": ".specs/modules/terminal.md",
+        "domain": "modules",
+        "document_type": "source"
+      },
+      {
+        "id": "modules-usage",
+        "path": ".specs/modules/usage.md",
+        "domain": "modules",
+        "document_type": "source"
+      },
+      {
+        "id": "modules-workspace",
+        "path": ".specs/modules/workspace.md",
+        "domain": "modules",
+        "document_type": "source"
+      },
+      {
+        "id": "project-discovery-report",
+        "path": ".specs/project/discovery-report.md",
+        "domain": "project",
+        "document_type": "source"
+      },
+      {
+        "id": "project-project-dna",
+        "path": ".specs/project/project-dna.md",
+        "domain": "project",
+        "document_type": "source"
+      },
+      {
+        "id": "project-vision",
+        "path": ".specs/project/vision.md",
+        "domain": "project",
+        "document_type": "source"
+      },
+      {
+        "id": "tasks-home-icon-and-closed-projects",
+        "path": ".specs/tasks/home-icon-and-closed-projects.md",
+        "domain": "tasks",
+        "document_type": "source"
+      },
+      {
+        "id": "tasks-initial-setup",
+        "path": ".specs/tasks/initial-setup.md",
+        "domain": "tasks",
+        "document_type": "source"
+      },
+      {
+        "id": "tasks-mysql-query-tabs",
+        "path": ".specs/tasks/mysql-query-tabs.md",
+        "domain": "tasks",
+        "document_type": "source"
+      },
+      {
+        "id": "tasks-sidebar-usage-panel",
+        "path": ".specs/tasks/sidebar-usage-panel.md",
+        "domain": "tasks",
+        "document_type": "source"
+      },
+      {
+        "id": "tasks-terminal-image-paste",
+        "path": ".specs/tasks/terminal-image-paste.md",
+        "domain": "tasks",
+        "document_type": "source"
+      },
+      {
+        "id": "tasks-terminal-plain-only",
+        "path": ".specs/tasks/terminal-plain-only.md",
+        "domain": "tasks",
+        "document_type": "source"
+      },
+      {
+        "id": "tasks-terminal-shift-enter",
+        "path": ".specs/tasks/terminal-shift-enter.md",
+        "domain": "tasks",
+        "document_type": "source"
+      },
+      {
+        "id": "tasks-unified-window-chrome",
+        "path": ".specs/tasks/unified-window-chrome.md",
+        "domain": "tasks",
+        "document_type": "source"
+      },
+      {
+        "id": "ui-design-direction",
+        "path": ".specs/ui/design-direction.md",
+        "domain": "ui",
+        "document_type": "source"
+      }
+    ],
+    "edges": [
+      {
+        "from": "architecture-overview",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "areas-desktop-window",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "modules-chat",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "modules-database",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "modules-files",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "modules-git",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "modules-shell",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "modules-terminal",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "modules-usage",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "modules-workspace",
+        "to": "architecture-overview",
+        "relation": "parent"
+      },
+      {
+        "from": "project-discovery-report",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "project-vision",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "tasks-home-icon-and-closed-projects",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "tasks-initial-setup",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "tasks-mysql-query-tabs",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "tasks-sidebar-usage-panel",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "tasks-terminal-image-paste",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "tasks-terminal-plain-only",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "tasks-terminal-shift-enter",
+        "to": "project-project-dna",
+        "relation": "parent"
+      },
+      {
+        "from": "tasks-unified-window-chrome",
+        "to": "tasks-initial-setup",
+        "relation": "parent"
+      },
+      {
+        "from": "ui-design-direction",
+        "to": "architecture-overview",
+        "relation": "parent"
+      }
+    ]
+  }
+}

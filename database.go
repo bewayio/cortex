@@ -1,0 +1,821 @@
+package main
+
+// Module: database. BCode acting as a client to the user's own external
+// databases — unrelated to ADR-0002 (BCode's own storage stays local JSON).
+// See .specs/modules/database.md and .specs/adrs/0009-mysql-client.md.
+
+import (
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"database/sql"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	_ "github.com/go-sql-driver/mysql"
+)
+
+// ─── Data Types ──────────────────────────────────────────────────────────────
+
+// DBConnection is what the frontend sees: never carries a password.
+type DBConnection struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Database string `json:"database"` // "" = not locked, browse all databases
+	Folder   string `json:"folder"`   // "" = ungrouped
+}
+
+// DBConnectionInput is what SaveDBConnection accepts. Password is plaintext
+// here only as a method parameter; it is encrypted before touching disk and
+// is never marshaled back to the frontend (see storedConnection below, which
+// is the on-disk shape).
+type DBConnectionInput struct {
+	ID       string `json:"id"` // empty on create
+	Name     string `json:"name"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"` // "" on edit = keep existing password
+	Database string `json:"database"`
+	Folder   string `json:"folder"`
+}
+
+// storedConnection is the on-disk shape in connections.json — same as
+// DBConnection plus the encrypted password. Never sent to the frontend as-is.
+type storedConnection struct {
+	DBConnection
+	PasswordEnc string `json:"passwordEnc"`
+}
+
+type ColumnInfo struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Nullable bool   `json:"nullable"`
+	Key      string `json:"key"`
+}
+
+type QueryResult struct {
+	Columns      []string        `json:"columns"`
+	Rows         [][]interface{} `json:"rows"`
+	RowCount     int             `json:"rowCount"`
+	RowsAffected int64           `json:"rowsAffected"`
+	DurationMs   int64           `json:"durationMs"`
+	Truncated    bool            `json:"truncated"`
+	Error        string          `json:"error,omitempty"`
+}
+
+// SavedQuery is a query tab's persisted content — global, not per-workspace,
+// same as connections (ADR-0009).
+type SavedQuery struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ConnectionID string `json:"connectionId"`
+	Database     string `json:"database"`
+	SQL          string `json:"sql"`
+	UpdatedAt    string `json:"updatedAt"`
+	Folder       string `json:"folder"` // "" = ungrouped
+}
+
+// Row cap for a single RunQuery — a manual SQL client use case, not a bulk
+// export tool. Documented limit, not a silent one (QueryResult.Truncated).
+const maxQueryRows = 5000
+
+// System schemas hidden from the database tree — a user browsing their own
+// data doesn't want MySQL's internal schemas cluttering it.
+var systemSchemas = map[string]bool{
+	"information_schema": true,
+	"performance_schema": true,
+	"mysql":              true,
+	"sys":                true,
+}
+
+// ─── Storage paths ───────────────────────────────────────────────────────────
+
+func dbDir() string {
+	return filepath.Join(bcodeDir(), "db")
+}
+
+func connectionsPath() string {
+	return filepath.Join(dbDir(), "connections.json")
+}
+
+func dbKeyPath() string {
+	return filepath.Join(dbDir(), "key")
+}
+
+func queriesDir() string {
+	return filepath.Join(bcodeDir(), "queries")
+}
+
+// ─── Encryption (ADR-0009) ──────────────────────────────────────────────────
+// AES-256-GCM, key stored locally at 0600. This protects the password from
+// casual exposure (a screenshot, a synced dotfiles backup) but NOT from
+// another process running as the same OS user — that process can read the
+// key file exactly as BCode does. Documented limit, not a gap to silently
+// "fix" later without a new ADR.
+
+func dbEncryptionKey() ([]byte, error) {
+	if err := os.MkdirAll(dbDir(), 0755); err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(dbKeyPath())
+	if err == nil && len(data) == 32 {
+		return data, nil
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(dbKeyPath(), key, 0600); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func encryptPassword(plain string) (string, error) {
+	if plain == "" {
+		return "", nil
+	}
+	key, err := dbEncryptionKey()
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	sealed := gcm.Seal(nonce, nonce, []byte(plain), nil)
+	return base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+func decryptPassword(enc string) (string, error) {
+	if enc == "" {
+		return "", nil
+	}
+	key, err := dbEncryptionKey()
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	raw, err := base64.StdEncoding.DecodeString(enc)
+	if err != nil {
+		return "", err
+	}
+	if len(raw) < gcm.NonceSize() {
+		return "", fmt.Errorf("invalid encrypted password")
+	}
+	nonce, ciphertext := raw[:gcm.NonceSize()], raw[gcm.NonceSize():]
+	plain, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", err
+	}
+	return string(plain), nil
+}
+
+// ─── Connection storage ──────────────────────────────────────────────────────
+
+func readStoredConnections() []storedConnection {
+	data, err := os.ReadFile(connectionsPath())
+	if err != nil {
+		return []storedConnection{}
+	}
+	list := []storedConnection{}
+	if err := json.Unmarshal(data, &list); err != nil {
+		return []storedConnection{}
+	}
+	if list == nil {
+		list = []storedConnection{}
+	}
+	return list
+}
+
+func writeStoredConnections(list []storedConnection) error {
+	if err := os.MkdirAll(dbDir(), 0755); err != nil {
+		return err
+	}
+	data, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(connectionsPath(), data, 0644)
+}
+
+// ListDBConnections never includes a password field.
+func (a *App) ListDBConnections() []DBConnection {
+	stored := readStoredConnections()
+	out := make([]DBConnection, 0, len(stored))
+	for _, s := range stored {
+		out = append(out, s.DBConnection)
+	}
+	return out
+}
+
+// SaveDBConnection upserts by id (creates one if input.ID is empty). Leaving
+// Password empty on an edit keeps the existing encrypted password unchanged —
+// the password is never round-tripped to the frontend to compare against.
+func (a *App) SaveDBConnection(input DBConnectionInput) (string, error) {
+	list := readStoredConnections()
+
+	if input.ID == "" {
+		input.ID = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+
+	encPassword := ""
+	found := false
+	for i, s := range list {
+		if s.ID == input.ID {
+			found = true
+			if input.Password == "" {
+				encPassword = s.PasswordEnc // keep existing
+			} else {
+				enc, err := encryptPassword(input.Password)
+				if err != nil {
+					return "", err
+				}
+				encPassword = enc
+			}
+			list[i] = storedConnection{
+				DBConnection: DBConnection{
+					ID: input.ID, Name: input.Name, Host: input.Host,
+					Port: input.Port, User: input.User, Database: input.Database,
+					Folder: input.Folder,
+				},
+				PasswordEnc: encPassword,
+			}
+			break
+		}
+	}
+	if !found {
+		enc, err := encryptPassword(input.Password)
+		if err != nil {
+			return "", err
+		}
+		list = append(list, storedConnection{
+			DBConnection: DBConnection{
+				ID: input.ID, Name: input.Name, Host: input.Host,
+				Port: input.Port, User: input.User, Database: input.Database,
+				Folder: input.Folder,
+			},
+			PasswordEnc: enc,
+		})
+	}
+
+	if err := writeStoredConnections(list); err != nil {
+		return "", err
+	}
+	return input.ID, nil
+}
+
+func (a *App) DeleteDBConnection(id string) error {
+	list := readStoredConnections()
+	filtered := make([]storedConnection, 0, len(list))
+	for _, s := range list {
+		if s.ID != id {
+			filtered = append(filtered, s)
+		}
+	}
+	return writeStoredConnections(filtered)
+}
+
+func findStoredConnection(id string) (storedConnection, error) {
+	for _, s := range readStoredConnections() {
+		if s.ID == id {
+			return s, nil
+		}
+	}
+	return storedConnection{}, fmt.Errorf("connection %s not found", id)
+}
+
+// openConn loads, decrypts and opens a connection. Caller must Close() the
+// returned *sql.DB. database, if non-empty, is selected via the DSN so
+// queries can use unqualified table names.
+func openConn(id string, database string) (*sql.DB, storedConnection, error) {
+	sc, err := findStoredConnection(id)
+	if err != nil {
+		return nil, sc, err
+	}
+	password, err := decryptPassword(sc.PasswordEnc)
+	if err != nil {
+		return nil, sc, fmt.Errorf("could not decrypt stored password: %w", err)
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
+		sc.User, password, sc.Host, sc.Port, database)
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, sc, err
+	}
+	return db, sc, nil
+}
+
+// TestDBConnection opens and pings, does not keep the connection.
+func (a *App) TestDBConnection(id string) error {
+	db, _, err := openConn(id, "")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return db.PingContext(ctx)
+}
+
+// ─── Introspection ───────────────────────────────────────────────────────────
+
+// ListDatabases: if the connection is locked to one database, returns just
+// that one without touching the network (ADR-0009 tree-shape rule).
+func (a *App) ListDatabases(connectionID string) ([]string, error) {
+	sc, err := findStoredConnection(connectionID)
+	if err != nil {
+		return nil, err
+	}
+	if sc.Database != "" {
+		return []string{sc.Database}, nil
+	}
+
+	db, _, err := openConn(connectionID, "")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(ctx, "SHOW DATABASES")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			continue
+		}
+		if !systemSchemas[name] {
+			out = append(out, name)
+		}
+	}
+	return out, rows.Err()
+}
+
+// ListTables uses information_schema (fully-qualified) rather than `USE` +
+// `SHOW TABLES`, since a pooled *sql.DB may reuse connections across calls
+// and USE would leak selected-database state between callers.
+func (a *App) ListTables(connectionID, database string) ([]string, error) {
+	db, _, err := openConn(connectionID, "")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(ctx,
+		"SELECT table_name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name",
+		database)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
+func (a *App) DescribeTable(connectionID, database, table string) ([]ColumnInfo, error) {
+	db, _, err := openConn(connectionID, "")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(ctx,
+		`SELECT column_name, column_type, is_nullable, column_key
+		 FROM information_schema.columns
+		 WHERE table_schema = ? AND table_name = ?
+		 ORDER BY ordinal_position`,
+		database, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []ColumnInfo{}
+	for rows.Next() {
+		var name, colType, nullable, key string
+		if err := rows.Scan(&name, &colType, &nullable, &key); err != nil {
+			continue
+		}
+		out = append(out, ColumnInfo{
+			Name: name, Type: colType, Nullable: nullable == "YES", Key: key,
+		})
+	}
+	return out, rows.Err()
+}
+
+// ─── Query execution ─────────────────────────────────────────────────────────
+
+// RunQuery executes exactly the SQL text given — no statement-type
+// allowlist/blocklist (ADR-0009: the user's own database, their risk, same
+// trust model as any SQL client). One statement per call in this version;
+// the caller is responsible for not sending multiple ;-separated statements.
+// statementReturnsRows decides Query vs Exec by looking at the statement's
+// first keyword, rather than trying Query and falling back to Exec on error:
+// go-sql-driver/mysql's Query does NOT error on INSERT/UPDATE/DELETE (MySQL's
+// wire protocol allows any statement via COM_QUERY), so a try-then-fallback
+// approach would silently lose RowsAffected — worse, retrying via Exec after
+// a "failed" Query would risk running the statement twice. Found and fixed
+// during manual verification against a real MySQL server (2026-09-26).
+func statementReturnsRows(sqlText string) bool {
+	s := strings.TrimSpace(sqlText)
+	// Strip a leading SQL comment or two, best-effort.
+	for strings.HasPrefix(s, "--") || strings.HasPrefix(s, "/*") {
+		if strings.HasPrefix(s, "--") {
+			if i := strings.IndexByte(s, '\n'); i >= 0 {
+				s = strings.TrimSpace(s[i+1:])
+			} else {
+				s = ""
+			}
+		} else if i := strings.Index(s, "*/"); i >= 0 {
+			s = strings.TrimSpace(s[i+2:])
+		} else {
+			break
+		}
+	}
+	upper := strings.ToUpper(s)
+	for _, kw := range []string{"SELECT", "SHOW", "DESCRIBE", "DESC ", "EXPLAIN", "WITH"} {
+		if strings.HasPrefix(upper, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) RunQuery(connectionID, database, sqlText string) QueryResult {
+	start := time.Now()
+	db, _, err := openConn(connectionID, database)
+	if err != nil {
+		return QueryResult{Error: err.Error()}
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	if !statementReturnsRows(sqlText) {
+		res, execErr := db.ExecContext(ctx, sqlText)
+		if execErr != nil {
+			return QueryResult{Error: execErr.Error(), DurationMs: time.Since(start).Milliseconds()}
+		}
+		affected, _ := res.RowsAffected()
+		return QueryResult{
+			Columns: []string{}, Rows: [][]interface{}{},
+			RowsAffected: affected, DurationMs: time.Since(start).Milliseconds(),
+		}
+	}
+
+	rows, queryErr := db.QueryContext(ctx, sqlText)
+	if queryErr != nil {
+		return QueryResult{Error: queryErr.Error(), DurationMs: time.Since(start).Milliseconds()}
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return QueryResult{Error: err.Error(), DurationMs: time.Since(start).Milliseconds()}
+	}
+
+	result := QueryResult{Columns: cols, Rows: [][]interface{}{}}
+	scanTargets := make([]interface{}, len(cols))
+	scanPtrs := make([]interface{}, len(cols))
+	for i := range scanTargets {
+		scanPtrs[i] = &scanTargets[i]
+	}
+
+	for rows.Next() {
+		if result.RowCount >= maxQueryRows {
+			result.Truncated = true
+			break
+		}
+		if err := rows.Scan(scanPtrs...); err != nil {
+			return QueryResult{Error: err.Error(), DurationMs: time.Since(start).Milliseconds()}
+		}
+		row := make([]interface{}, len(cols))
+		for i, v := range scanTargets {
+			row[i] = jsonSafeValue(v)
+		}
+		result.Rows = append(result.Rows, row)
+		result.RowCount++
+	}
+	result.DurationMs = time.Since(start).Milliseconds()
+	if rows.Err() != nil {
+		result.Error = rows.Err().Error()
+	}
+	return result
+}
+
+// jsonSafeValue converts a driver-scanned value into something JSON-safe for
+// the Wails bridge: []byte -> string, time.Time -> RFC3339, nil stays nil.
+func jsonSafeValue(v interface{}) interface{} {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case []byte:
+		return string(t)
+	case time.Time:
+		return t.Format(time.RFC3339)
+	default:
+		return t
+	}
+}
+
+// ─── Saved queries (global, not per-workspace — ADR-0009) ──────────────────
+
+func savedQueryPath(id string) string {
+	return filepath.Join(queriesDir(), id+".json")
+}
+
+func (a *App) ListSavedQueries() []SavedQuery {
+	entries, err := os.ReadDir(queriesDir())
+	if err != nil {
+		return []SavedQuery{}
+	}
+	out := []SavedQuery{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(queriesDir(), e.Name()))
+		if err != nil {
+			continue
+		}
+		var sq SavedQuery
+		if err := json.Unmarshal(data, &sq); err != nil {
+			continue
+		}
+		out = append(out, sq)
+	}
+	return out
+}
+
+// SaveQueryTab returns the query's id — the frontend has no other way to
+// learn the id generated on first save (found while wiring the explicit
+// "Save" action: the previous void-returning signature meant a newly created
+// query could never be identified for a later update).
+func (a *App) SaveQueryTab(sq SavedQuery) (string, error) {
+	if err := os.MkdirAll(queriesDir(), 0755); err != nil {
+		return "", err
+	}
+	if sq.ID == "" {
+		sq.ID = fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	sq.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	data, err := json.Marshal(sq)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(savedQueryPath(sq.ID), data, 0644); err != nil {
+		return "", err
+	}
+	return sq.ID, nil
+}
+
+func (a *App) DeleteQueryTab(id string) error {
+	err := os.Remove(savedQueryPath(id))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// ─── Grouping folders ────────────────────────────────────────────────────────
+// A folder is just a name the user has created — connections/saved queries
+// reference it by name in their own Folder field. Folder lists are stored
+// separately so an empty folder (created but nothing moved into it yet) still
+// persists; deleting a folder un-groups (not deletes) whatever was in it.
+
+func connectionFoldersPath() string {
+	return filepath.Join(dbDir(), "connection_folders.json")
+}
+
+func queryFoldersPath() string {
+	return filepath.Join(queriesDir(), "folders.json")
+}
+
+func readFolderList(path string) []string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []string{}
+	}
+	list := []string{}
+	if err := json.Unmarshal(data, &list); err != nil {
+		return []string{}
+	}
+	if list == nil {
+		list = []string{}
+	}
+	return list
+}
+
+func writeFolderList(path string, list []string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func addFolder(path, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("folder name cannot be empty")
+	}
+	list := readFolderList(path)
+	for _, f := range list {
+		if f == name {
+			return nil // already exists, no-op
+		}
+	}
+	return writeFolderList(path, append(list, name))
+}
+
+func removeFolder(path, name string) error {
+	list := readFolderList(path)
+	filtered := make([]string, 0, len(list))
+	for _, f := range list {
+		if f != name {
+			filtered = append(filtered, f)
+		}
+	}
+	return writeFolderList(path, filtered)
+}
+
+func (a *App) ListDBConnectionFolders() []string {
+	return readFolderList(connectionFoldersPath())
+}
+
+func (a *App) CreateDBConnectionFolder(name string) error {
+	return addFolder(connectionFoldersPath(), name)
+}
+
+// DeleteDBConnectionFolder removes the folder and un-groups (not deletes) any
+// connection that was in it.
+func (a *App) DeleteDBConnectionFolder(name string) error {
+	list := readStoredConnections()
+	changed := false
+	for i, s := range list {
+		if s.Folder == name {
+			list[i].Folder = ""
+			changed = true
+		}
+	}
+	if changed {
+		if err := writeStoredConnections(list); err != nil {
+			return err
+		}
+	}
+	return removeFolder(connectionFoldersPath(), name)
+}
+
+// RenameDBConnectionFolder renames a folder everywhere it's referenced. If
+// newName already names a different existing folder, this merges into it
+// (every connection in oldName is reassigned to newName, and oldName is
+// dropped from the folder list) rather than erroring — folders are just
+// names, not unique-checked entities, same as everywhere else in this file.
+func (a *App) RenameDBConnectionFolder(oldName, newName string) error {
+	newName = strings.TrimSpace(newName)
+	if newName == "" || newName == oldName {
+		return nil
+	}
+	list := readStoredConnections()
+	changed := false
+	for i, s := range list {
+		if s.Folder == oldName {
+			list[i].Folder = newName
+			changed = true
+		}
+	}
+	if changed {
+		if err := writeStoredConnections(list); err != nil {
+			return err
+		}
+	}
+	if err := removeFolder(connectionFoldersPath(), oldName); err != nil {
+		return err
+	}
+	return addFolder(connectionFoldersPath(), newName)
+}
+
+// MoveDBConnectionToFolder assigns (or clears, with folder="") a connection's
+// group without touching any other field, including the password.
+func (a *App) MoveDBConnectionToFolder(id string, folder string) error {
+	list := readStoredConnections()
+	found := false
+	for i, s := range list {
+		if s.ID == id {
+			list[i].Folder = folder
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("connection %s not found", id)
+	}
+	return writeStoredConnections(list)
+}
+
+func (a *App) ListQueryFolders() []string {
+	return readFolderList(queryFoldersPath())
+}
+
+func (a *App) CreateQueryFolder(name string) error {
+	return addFolder(queryFoldersPath(), name)
+}
+
+// DeleteQueryFolder removes the folder and un-groups (not deletes) any saved
+// query that was in it.
+func (a *App) DeleteQueryFolder(name string) error {
+	for _, sq := range a.ListSavedQueries() {
+		if sq.Folder == name {
+			sq.Folder = ""
+			if _, err := a.SaveQueryTab(sq); err != nil {
+				return err
+			}
+		}
+	}
+	return removeFolder(queryFoldersPath(), name)
+}
+
+// MoveQueryToFolder assigns (or clears, with folder="") a saved query's group.
+func (a *App) MoveQueryToFolder(id string, folder string) error {
+	data, err := os.ReadFile(savedQueryPath(id))
+	if err != nil {
+		return err
+	}
+	var sq SavedQuery
+	if err := json.Unmarshal(data, &sq); err != nil {
+		return err
+	}
+	sq.Folder = folder
+	_, err = a.SaveQueryTab(sq)
+	return err
+}
+
+// RenameQueryFolder renames a folder everywhere it's referenced, merging
+// into newName if it already names a different existing folder — same
+// reasoning as RenameDBConnectionFolder.
+func (a *App) RenameQueryFolder(oldName, newName string) error {
+	newName = strings.TrimSpace(newName)
+	if newName == "" || newName == oldName {
+		return nil
+	}
+	for _, sq := range a.ListSavedQueries() {
+		if sq.Folder == oldName {
+			sq.Folder = newName
+			if _, err := a.SaveQueryTab(sq); err != nil {
+				return err
+			}
+		}
+	}
+	if err := removeFolder(queryFoldersPath(), oldName); err != nil {
+		return err
+	}
+	return addFolder(queryFoldersPath(), newName)
+}

@@ -1,0 +1,174 @@
+name: Release
+
+# Builds native macOS/Linux/Windows binaries on every push to main, invents
+# a version number itself (BASE_VERSION below + this run's number — no
+# manual tagging needed here), and publishes them as a new, permanently
+# versioned GitHub Release + git tag on the public bewayio/homebrew-bcode
+# repo (with a checksums.txt, sha256 per asset). It then updates that repo's
+# Casks/bcode.rb (version + sha256) automatically — no manual cask edit
+# needed after a release either. See .specs/modules/release.md.
+#
+# To bump the major/minor version, edit BASE_VERSION below — the patch
+# number (this workflow's run number) always increases on its own.
+#
+# Requires a repo secret BCODE_RELEASE_TOKEN: a fine-grained GitHub PAT
+# scoped to `contents:write` on bewayio/homebrew-bcode only. Create it under
+# https://github.com/settings/tokens and add it under this repo's
+# Settings > Secrets and variables > Actions. Not something this workflow
+# (or the assistant that wrote it) creates on its own.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  BASE_VERSION: "0.1"
+  # Forces the public npm registry regardless of any org/account-level
+  # override — hit a 403 from a private registry (npm.artifacts.furycloud.io)
+  # neither this workflow nor the project's package.json/.npmrc reference,
+  # so it must be coming from an org-wide Actions setting. This is a public
+  # project; it has no business depending on a private internal proxy.
+  NPM_CONFIG_REGISTRY: "https://registry.npmjs.org/"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux/amd64
+            bin: bcode
+            asset: bcode-linux-amd64.tar.gz
+          - os: macos-latest
+            platform: darwin/universal
+            bin: bcode.app
+            asset: bcode-macos-universal.zip
+          - os: windows-latest
+            platform: windows/amd64
+            bin: bcode.exe
+            asset: bcode-windows-amd64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Pinned to match go.mod's github.com/wailsapp/wails/v2 version —
+      # a mismatched CLI/library pair is a common source of build failures.
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      # Wails v2.12.0's own webview bindings look up webkit2gtk-4.0 via
+      # pkg-config specifically (hardcoded, not just an apt package name
+      # choice) — Ubuntu 24.04 ("ubuntu-latest" as of 2026-09) dropped that
+      # package for webkit2gtk-4.1, which pkg-config won't match under the
+      # old name. Pinned this job to ubuntu-22.04 instead, which still has
+      # libwebkit2gtk-4.0-dev, rather than working around Wails itself.
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
+
+      - name: Build
+        run: wails build -platform ${{ matrix.platform }} -clean
+
+      - name: Package (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: tar -czf ${{ matrix.asset }} -C build/bin ${{ matrix.bin }}
+
+      - name: Package (macOS)
+        if: matrix.os == 'macos-latest'
+        run: (cd build/bin && zip -r ../../${{ matrix.asset }} ${{ matrix.bin }})
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: Compress-Archive -Path build/bin/${{ matrix.bin }} -DestinationPath ${{ matrix.asset }}
+
+      # One sha256 file per asset — the publish job bundles these into a
+      # single checksums.txt, and the cask formula pins these exact values.
+      - name: Checksum (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: shasum -a 256 ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
+
+      - name: Checksum (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: (Get-FileHash ${{ matrix.asset }} -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.asset }}" | Out-File -Encoding ascii ${{ matrix.asset }}.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            ${{ matrix.asset }}
+            ${{ matrix.asset }}.sha256
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Combine checksums
+        run: cat artifacts/*.sha256 > artifacts/checksums.txt
+
+      # No tag is pushed here in bewayio/code — the version is invented by
+      # this workflow itself (BASE_VERSION + this run's own number, which
+      # only ever increases), so every push to main gets its own permanent,
+      # correctly versioned release without the user tagging anything.
+      - name: Compute version
+        id: version
+        run: echo "value=${BASE_VERSION}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # Versioned release (one per push), not a rolling "latest" — the
+      # Homebrew cask needs a stable version + sha256 pair per release.
+      # Cross-repo via owner/repo, so this needs BCODE_RELEASE_TOKEN (see
+      # the note at the top of this file) instead of the default
+      # GITHUB_TOKEN, which only has access to this repo.
+      - name: Publish release to bewayio/homebrew-bcode
+        uses: ncipollo/release-action@v1
+        with:
+          owner: bewayio
+          repo: homebrew-bcode
+          token: ${{ secrets.BCODE_RELEASE_TOKEN }}
+          tag: v${{ steps.version.outputs.value }}
+          name: v${{ steps.version.outputs.value }}
+          body: >-
+            Automated build from bewayio/code@${{ github.sha }}.
+            Unsigned binaries — macOS Gatekeeper and Windows SmartScreen
+            may warn on first launch.
+          artifacts: artifacts/*
+
+      # Keeps Casks/bcode.rb in sync automatically — no manual version/sha256
+      # bump needed after each release. Same token as the publish step above,
+      # since it already has contents:write on this repo.
+      - name: Update Homebrew cask
+        env:
+          BCODE_RELEASE_TOKEN: ${{ secrets.BCODE_RELEASE_TOKEN }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          SHA256=$(grep "bcode-macos-universal.zip" artifacts/checksums.txt | awk '{print $1}')
+
+          git clone "https://x-access-token:${BCODE_RELEASE_TOKEN}@github.com/bewayio/homebrew-bcode.git" tap
+          cd tap
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/bcode.rb
+          sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Casks/bcode.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/bcode.rb
+          git commit -m "bcode ${VERSION}"
+          git push
