@@ -2,6 +2,8 @@ package main
 
 import (
 	"embed"
+	"fmt"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -12,7 +14,17 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// Version is set at build time via -ldflags "-X main.Version=...";
+// the release workflow passes the same version it tags the GitHub
+// Release with. Left as "dev" for local `wails build`/`wails dev`.
+var Version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("bcode " + Version)
+		return
+	}
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{

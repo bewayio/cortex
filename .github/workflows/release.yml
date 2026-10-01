@@ -40,7 +40,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux/amd64
             bin: bcode
-            asset: bcode-linux-amd64.tar.gz
+            asset: bcode-linux-x86_64.AppImage
           - os: macos-latest
             platform: darwin/universal
             bin: bcode.app
@@ -68,6 +68,14 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
+      # Same formula the publish job uses later to tag the release — computed
+      # here too so the binary's own `bcode --version` matches the release
+      # it ships in, without waiting on the publish job.
+      - name: Compute version
+        id: version
+        shell: bash
+        run: echo "value=${BASE_VERSION}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
       # Wails v2.12.0's own webview bindings look up webkit2gtk-4.0 via
       # pkg-config specifically (hardcoded, not just an apt package name
       # choice) — Ubuntu 24.04 ("ubuntu-latest" as of 2026-09) dropped that
@@ -78,14 +86,57 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config imagemagick
 
       - name: Build
-        run: wails build -platform ${{ matrix.platform }} -clean
+        run: wails build -platform ${{ matrix.platform }} -clean -ldflags "-X main.Version=${{ steps.version.outputs.value }}"
+
+      # The plain binary dynamically links libwebkit2gtk-4.0 and friends,
+      # which most end-user systems don't have installed (confirmed by a
+      # real user report, 2026-09-30: "error while loading shared
+      # libraries: libwebkit2gtk-4.0.so.37"). linuxdeploy bundles the
+      # binary's full shared-library closure (via ldd) into a self-
+      # contained AppImage; the gtk plugin additionally bundles WebKitGTK's
+      # own helper processes, GTK modules, GSettings schemas and locale
+      # data, which a plain ldd-based bundle would miss. See
+      # .specs/modules/release.md and .specs/tasks/linux-appimage-packaging.md.
+      - name: Install linuxdeploy
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          wget -q -O linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q -O linuxdeploy-plugin-gtk https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
+          chmod +x linuxdeploy linuxdeploy-plugin-gtk
 
       - name: Package (Linux)
         if: matrix.os == 'ubuntu-22.04'
-        run: tar -czf ${{ matrix.asset }} -C build/bin ${{ matrix.bin }}
+        run: |
+          mkdir -p AppDir/usr/bin
+          cp build/bin/${{ matrix.bin }} AppDir/usr/bin/
+          cp build/linux/bcode.desktop AppDir/bcode.desktop
+
+          # linuxdeploy only accepts a fixed list of icon resolutions;
+          # build/appicon.png is 1024x1024 (not in that list), so resize
+          # down to 512x512 (the largest valid size) for the AppImage icon.
+          convert build/appicon.png -resize 512x512 AppDir/bcode.png
+
+          # GitHub-hosted runners don't have a working FUSE, which
+          # linuxdeploy (itself an AppImage) needs to mount itself unless
+          # told to extract-and-run instead.
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export NO_STRIP=true
+          export PATH="$PWD:$PATH"
+          ./linuxdeploy --appdir AppDir \
+            --executable AppDir/usr/bin/${{ matrix.bin }} \
+            --desktop-file AppDir/bcode.desktop \
+            --icon-file AppDir/bcode.png \
+            --plugin gtk \
+            --output appimage
+
+          # appimagetool names the output after the desktop file's Name=
+          # entry (BCode) + arch — matched via glob instead of hardcoding
+          # the exact casing, since that's an implementation detail of the
+          # tool, not something this step should have to track by hand.
+          mv ./*.AppImage ${{ matrix.asset }}
 
       - name: Package (macOS)
         if: matrix.os == 'macos-latest'
