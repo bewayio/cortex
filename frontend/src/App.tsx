@@ -42,19 +42,24 @@ function lsInt(key: string, def: number) {
   const v = localStorage.getItem(key)
   return v ? parseInt(v, 10) || def : def
 }
-function lsStr<T extends string>(key: string, def: T): T {
-  return (localStorage.getItem(key) as T) ?? def
-}
-
 export default function App() {
   const [activePanel, setActivePanel]       = useState<Panel>('explorer')
   const [showTerminal, setShowTerminal]     = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(() => lsInt('bcode.terminalHeight', 220))
   const [sidebarWidth, setSidebarWidth]     = useState(() => lsInt('bcode.sidebarWidth', 240))
   const [terminalInitialCount, setTerminalInitialCount] = useState(1)
-  const [terminalDock, setTerminalDock]   = useState<'bottom' | 'right'>(() => lsStr('bcode.terminalDock', 'bottom'))
   const [terminalWidth, setTerminalWidth] = useState(() => lsInt('bcode.terminalWidth', 420))
   const [terminalMounted, setTerminalMounted] = useState(false)
+  // Cada dock mostra/esconde terminais independentemente — nenhum dos dois é
+  // mais "o" dock do terminal; um terminal arrastado pra qualquer um dos dois
+  // fica lá até ser arrastado de volta ou fechado.
+  const [bottomContainerEl, setBottomContainerEl] = useState<HTMLDivElement | null>(null)
+  const [rightContainerEl,  setRightContainerEl]  = useState<HTMLDivElement | null>(null)
+  const [bottomTermCount, setBottomTermCount] = useState(0)
+  const [rightTermCount,  setRightTermCount]  = useState(0)
+  // Enquanto um terminal está sendo arrastado, revela o dock oposto mesmo
+  // vazio — senão não haveria onde soltar pra popular um dock vazio.
+  const [isDraggingTerminal, setIsDraggingTerminal] = useState(false)
   const [showFileSearch, setShowFileSearch]   = useState(false)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [showQuerySearch, setShowQuerySearch] = useState(false)
@@ -273,10 +278,6 @@ export default function App() {
     return () => clearTimeout(t)
   }, [terminalWidth])
 
-  useEffect(() => {
-    localStorage.setItem('bcode.terminalDock', terminalDock)
-  }, [terminalDock])
-
   // Persiste visibilidade do terminal em localStorage (síncrono — beforeunload não espera async)
   useEffect(() => {
     localStorage.setItem('bcode.terminalVisible', showTerminal ? '1' : '0')
@@ -409,58 +410,72 @@ export default function App() {
             <div className="sidebar-resize-handle" onMouseDown={handleSidebarResize} />
           </div>
 
-          <div
-            className="editor-area"
-            style={{ flexDirection: terminalDock === 'right' ? 'row' : 'column' }}
-          >
+          <div className="editor-area">
             <EditorPane onOpenWorkspace={handleOpenWorkspace} />
 
-            {/* Resize handle — só visível quando terminal está aberto */}
-            {showTerminal && terminalMounted && (
-              <div
-                className={terminalDock === 'bottom' ? 'terminal-resize-h' : 'terminal-resize-v'}
-                onMouseDown={terminalDock === 'bottom'
-                  ? handleTerminalResize
-                  : handleTerminalWidthResize}
-              />
+            {showTerminal && bottomTermCount > 0 && (
+              <div className="terminal-resize-h" onMouseDown={handleTerminalResize} />
             )}
-            {/* Terminal: montado uma vez e mantido vivo (display:none) para preservar nomes e histórico */}
-            {terminalMounted && (
-              <div style={{
-                display: showTerminal ? 'flex' : 'none',
+            {/* Sempre montado (não só quando há abas) — é o alvo do portal de
+                Terminal, precisa existir antes da 1ª aba ser arrastada pra cá.
+                Vira zona de soltura "fantasma" (altura mínima) durante um
+                arrasto, mesmo com 0 abas — senão não haveria onde soltar. */}
+            <div
+              ref={setBottomContainerEl}
+              style={{
+                display: showTerminal && (bottomTermCount > 0 || isDraggingTerminal) ? 'flex' : 'none',
                 flexDirection: 'column',
-                // Bottom: altura fixa; Right: largura fixa (flex:1 seria ignorar width)
-                ...(terminalDock === 'bottom'
-                  ? { height: terminalHeight, width: '100%', flexShrink: 0 }
-                  : { width: terminalWidth, flexShrink: 0, alignSelf: 'stretch', minHeight: 0 }),
-              }}>
-                <Terminal
-                  height={terminalDock === 'bottom' ? terminalHeight : undefined}
-                  width={terminalDock === 'right'  ? terminalWidth  : undefined}
-                  dock={terminalDock}
-                  visible={showTerminal}
-                  onToggleDock={() => setTerminalDock(d => d === 'bottom' ? 'right' : 'bottom')}
-                  workspaceId={currentWorkspace?.id ?? ''}
-                  workdir={currentWorkspace?.path ?? '~'}
-                  initialCount={terminalInitialCount}
-                  onTabsChange={n => {
-                    terminalCountRef.current = n
-                    const ws = useWorkspaceStore.getState().currentWorkspace
-                    if (ws) persistCurrentWs(ws)
-                  }}
-                  onClose={() => {
-                    setShowTerminal(false)
-                    terminalCountRef.current = 0
-                    const ws = useWorkspaceStore.getState().currentWorkspace
-                    if (ws) persistCurrentWs(ws)
-                  }}
-                />
-              </div>
-            )}
+                height: bottomTermCount > 0 ? terminalHeight : 100,
+                width: '100%', flexShrink: 0,
+              }}
+            />
           </div>
+
+          {showTerminal && rightTermCount > 0 && (
+            <div className="terminal-resize-v" onMouseDown={handleTerminalWidthResize} />
+          )}
+          <div
+            ref={setRightContainerEl}
+            style={{
+              display: showTerminal && (rightTermCount > 0 || isDraggingTerminal) ? 'flex' : 'none',
+              flexDirection: 'column',
+              width: rightTermCount > 0 ? terminalWidth : 160,
+              flexShrink: 0, alignSelf: 'stretch', minHeight: 0,
+              borderLeft: '1px solid var(--divider)',
+            }}
+          />
         </div>
       </div>
       <StatusBar />
+
+      {/* Terminal: montado uma vez e mantido vivo (portais nos dois containers acima)
+          para preservar nomes e histórico mesmo com o painel escondido. */}
+      {terminalMounted && (
+        <Terminal
+          bottomContainer={bottomContainerEl}
+          rightContainer={rightContainerEl}
+          bottomHeight={terminalHeight}
+          rightWidth={terminalWidth}
+          visible={showTerminal}
+          workspaceId={currentWorkspace?.id ?? ''}
+          workdir={currentWorkspace?.path ?? '~'}
+          initialCount={terminalInitialCount}
+          onDraggingChange={setIsDraggingTerminal}
+          onTabCountChange={(dock, n) => {
+            if (dock === 'bottom') setBottomTermCount(n)
+            else setRightTermCount(n)
+            terminalCountRef.current = (dock === 'bottom' ? n : bottomTermCount) + (dock === 'right' ? n : rightTermCount)
+            const ws = useWorkspaceStore.getState().currentWorkspace
+            if (ws) persistCurrentWs(ws)
+          }}
+          onAllClosed={() => {
+            setShowTerminal(false)
+            terminalCountRef.current = 0
+            const ws = useWorkspaceStore.getState().currentWorkspace
+            if (ws) persistCurrentWs(ws)
+          }}
+        />
+      )}
 
       {showFileSearch && (
         <FileSearch

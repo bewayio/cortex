@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
   ChevronRight, Database as DatabaseIcon, Table2, Plus, Pencil, Trash2,
-  PlugZap, FileText, Folder, FolderPlus, FolderOpen, History,
+  PlugZap, FileText, Folder, FolderPlus, FolderOpen, History, RefreshCw,
 } from 'lucide-react'
 import { useEditorStore } from '../stores/editorStore'
 import { usePlatform } from '../utils/platform'
@@ -54,6 +54,9 @@ export default function DatabasePanel() {
   const [expandedFolder, setExpandedFolder] = useState<Set<string>>(new Set()) // key: "connection:Name" | "query:Name"
   const [databasesByConn, setDatabasesByConn] = useState<Record<string, string[]>>({})
   const [tablesByDb, setTablesByDb] = useState<Record<string, string[]>>({})
+  // Erro ao listar tabelas de UMA database (key igual a tablesByDb) — antes
+  // era engolido (`.catch(() => [])`), indistinguível de uma database vazia.
+  const [dbError, setDbError] = useState<Record<string, string>>({})
 
   const [form, setForm] = useState<FormState | null>(null)
   const [testMsg, setTestMsg] = useState<{ id: string; ok: boolean; msg: string } | null>(null)
@@ -161,27 +164,47 @@ export default function DatabasePanel() {
     return () => window.removeEventListener('bcode:saved-queries-changed', onSaved)
   }, [])
 
+  // Busca as tabelas de UMA database. Sucesso limpa qualquer erro anterior;
+  // falha NÃO grava `tablesByDb[key]` (nada de cache de lista vazia-por-erro
+  // — deixa a chave ausente pra uma próxima tentativa de expandir poder
+  // reconsultar de verdade) e grava a mensagem em `dbError[key]`.
+  const fetchDbTables = async (connId: string, database: string) => {
+    const key = `${connId}/${database}`
+    try {
+      const tables = await ListTables(connId, database)
+      setTablesByDb(prev => ({ ...prev, [key]: tables }))
+      setDbError(prev => { const n = { ...prev }; delete n[key]; return n })
+    } catch (err) {
+      setDbError(prev => ({ ...prev, [key]: err instanceof Error ? err.message : String(err) }))
+    }
+  }
+
+  // Busca as databases de UMA conexão (e, se travada numa única database,
+  // as tabelas dela também). Falha NÃO grava `databasesByConn[conn.id]` —
+  // mesma lógica de "não cachear vazio-por-erro" do fetchDbTables, senão o
+  // guard `!databasesByConn[conn.id]` nunca mais deixaria reconsultar.
+  const fetchConnDatabases = async (conn: DBConnection) => {
+    try {
+      const dbs = await ListDatabases(conn.id)
+      setDatabasesByConn(prev => ({ ...prev, [conn.id]: dbs }))
+      setTestMsg(prev => (prev?.id === conn.id ? null : prev))
+      if (conn.database && dbs.length === 1) {
+        const key = `${conn.id}/${dbs[0]}`
+        await fetchDbTables(conn.id, dbs[0])
+        setExpandedDb(prev => new Set(prev).add(key))
+      }
+    } catch (err) {
+      setTestMsg({ id: conn.id, ok: false, msg: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
   const toggleConn = async (conn: DBConnection) => {
     const next = new Set(expandedConn)
     if (next.has(conn.id)) {
       next.delete(conn.id)
     } else {
       next.add(conn.id)
-      if (!databasesByConn[conn.id]) {
-        try {
-          const dbs = await ListDatabases(conn.id)
-          setDatabasesByConn(prev => ({ ...prev, [conn.id]: dbs }))
-          if (conn.database && dbs.length === 1) {
-            const key = `${conn.id}/${dbs[0]}`
-            const tables = await ListTables(conn.id, dbs[0]).catch(() => [])
-            setTablesByDb(prev => ({ ...prev, [key]: tables }))
-            setExpandedDb(prev => new Set(prev).add(key))
-          }
-        } catch (err) {
-          setDatabasesByConn(prev => ({ ...prev, [conn.id]: [] }))
-          setTestMsg({ id: conn.id, ok: false, msg: err instanceof Error ? err.message : String(err) })
-        }
-      }
+      if (!databasesByConn[conn.id]) await fetchConnDatabases(conn)
     }
     setExpandedConn(next)
   }
@@ -193,12 +216,29 @@ export default function DatabasePanel() {
       next.delete(key)
     } else {
       next.add(key)
-      if (!tablesByDb[key]) {
-        const tables = await ListTables(connId, database).catch(() => [])
-        setTablesByDb(prev => ({ ...prev, [key]: tables }))
-      }
+      if (!tablesByDb[key]) await fetchDbTables(connId, database)
     }
     setExpandedDb(next)
+  }
+
+  // Força reconectar: limpa databases/tables/erros cacheados desta conexão
+  // e reconsulta do zero, expandindo a linha caso estivesse colapsada.
+  const reconnectConnection = async (conn: DBConnection) => {
+    setDatabasesByConn(prev => { const n = { ...prev }; delete n[conn.id]; return n })
+    const prefix = `${conn.id}/`
+    setTablesByDb(prev => {
+      const n = { ...prev }
+      Object.keys(n).forEach(k => { if (k.startsWith(prefix)) delete n[k] })
+      return n
+    })
+    setDbError(prev => {
+      const n = { ...prev }
+      Object.keys(n).forEach(k => { if (k.startsWith(prefix)) delete n[k] })
+      return n
+    })
+    setTestMsg(prev => (prev?.id === conn.id ? null : prev))
+    setExpandedConn(prev => new Set(prev).add(conn.id))
+    await fetchConnDatabases(conn)
   }
 
   const toggleFolder = (kind: ItemKind, name: string) => {
@@ -460,6 +500,13 @@ export default function DatabasePanel() {
         const skipDbLevel = !!conn.database
         const key = `${conn.id}/${dbName}`
         if (skipDbLevel) {
+          if (dbError[key]) {
+            return (
+              <div key={`${dbName}-err`} className="db-test-msg err" style={{ marginLeft: indent + 20 }}>
+                {dbError[key]}
+              </div>
+            )
+          }
           return (tablesByDb[key] || []).map(table => (
             <div key={table} className="file-tree-item"
               style={{ paddingLeft: indent + 16 }}
@@ -488,7 +535,10 @@ export default function DatabasePanel() {
                 <History size={12} />
               </button>
             </div>
-            {expandedDb.has(key) && (tablesByDb[key] || []).map(table => (
+            {expandedDb.has(key) && dbError[key] && (
+              <div className="db-test-msg err" style={{ marginLeft: indent + 36 }}>{dbError[key]}</div>
+            )}
+            {expandedDb.has(key) && !dbError[key] && (tablesByDb[key] || []).map(table => (
               <div key={table} className="file-tree-item"
                 style={{ paddingLeft: indent + 32 }}
                 onClick={() => openQueryTab(conn.id, dbName, table)}>
@@ -780,6 +830,15 @@ export default function DatabasePanel() {
             }}>
               <Pencil size={13} /> Rename
             </div>
+            {ctxMenu.kind === 'connection' && (
+              <div className="context-menu-item" onClick={() => {
+                const conn = connections.find(c => c.id === ctxMenu.id)
+                setCtxMenu(null)
+                if (conn) reconnectConnection(conn)
+              }}>
+                <RefreshCw size={13} /> Reconnect
+              </div>
+            )}
             <div className="context-menu-separator" />
             <div className="context-menu-label">Move to folder</div>
             {ctxMenu.currentFolder && (

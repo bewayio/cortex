@@ -119,6 +119,28 @@ jobs:
           # down to 512x512 (the largest valid size) for the AppImage icon.
           convert build/appicon.png -resize 512x512 AppDir/bcode.png
 
+          # WebKitGTK spawns WebKitNetworkProcess/WebKitWebProcess as
+          # separate helper binaries (libexec dir), not shared libraries —
+          # linuxdeploy's ldd-based bundling (even with --plugin gtk) only
+          # follows the main executable's *library* dependencies, so these
+          # helper binaries are never copied in, and WebKitGTK falls back to
+          # its compiled-in absolute system path at runtime (confirmed by a
+          # real run, 2026-10-01: "Unable to spawn ... WebKitNetworkProcess
+          # (Arquivo ou diretório inexistente)" — the exact system path from
+          # the original webkit2gtk-4.0 bug this AppImage exists to avoid).
+          # Fix: bundle that libexec dir by hand, and point WebKitGTK at the
+          # bundled copy via WEBKIT_EXEC_PATH, set through linuxdeploy's
+          # apprun-hooks mechanism (sourced by the generated AppRun before
+          # exec'ing the real binary).
+          WEBKIT_LIBEXEC_DIR=/usr/lib/x86_64-linux-gnu/webkit2gtk-4.0
+          mkdir -p "AppDir$WEBKIT_LIBEXEC_DIR"
+          cp -r "$WEBKIT_LIBEXEC_DIR"/. "AppDir$WEBKIT_LIBEXEC_DIR/"
+
+          mkdir -p AppDir/apprun-hooks
+          cat > AppDir/apprun-hooks/webkit-exec-path.sh <<'EOF'
+          export WEBKIT_EXEC_PATH="$APPDIR/usr/lib/x86_64-linux-gnu/webkit2gtk-4.0"
+          EOF
+
           # GitHub-hosted runners don't have a working FUSE, which
           # linuxdeploy (itself an AppImage) needs to mount itself unless
           # told to extract-and-run instead.

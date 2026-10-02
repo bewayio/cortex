@@ -3,7 +3,7 @@ bsdd_version: "1.0"
 document_type: source
 domain: tasks
 last_updated: 2026-10-01
-version: 3
+version: 4
 connections:
   parent: .specs/modules/release.md
   children: []
@@ -33,7 +33,8 @@ Reported 2026-09-30: running the current Linux binary fails with `error while lo
 - [ ] Release asset renamed from `bcode-linux-amd64.tar.gz` to `bcode-linux-x86_64.AppImage` (AppImage's own naming convention) everywhere it's referenced: the workflow's asset upload step, `checksums.txt` generation, and any existing docs/specs that name the old filename.
 - [ ] The "always latest" stable download URL for Linux (`.../releases/latest/download/bcode-linux-amd64.tar.gz`) is updated to the new AppImage filename, including in `.specs/modules/release.md`'s Notes where it's currently documented.
 - [ ] `checksums.txt` still contains one sha256 line per platform asset, now reflecting the AppImage instead of the tarball.
-- [ ] A real CI run on `bewayio/code` confirms the Linux job builds and publishes the AppImage successfully (this module's Notes already show two prior Linux/macOS CI bugs that only surfaced on a real run, not locally).
+- [ ] The launched AppImage spawns `WebKitNetworkProcess`/`WebKitWebProcess` from the bundled copy, not the system path — fixed 2026-10-01 (libexec dir bundled by hand + `WEBKIT_EXEC_PATH` via an `apprun-hooks` script), not yet re-verified on a real run.
+- [ ] A real CI run on `bewayio/code` confirms the Linux job builds and publishes the AppImage successfully (this module's Notes already show two prior Linux/macOS CI bugs, plus this WebKitNetworkProcess one, that only surfaced on a real run, not locally).
 
 ## Affected Modules
 

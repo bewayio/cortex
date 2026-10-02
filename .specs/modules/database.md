@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: modules
-last_updated: 2026-09-27
-version: 1
+last_updated: 2026-10-01
+version: 3
 connections:
   parent: .specs/architecture/overview.md
   children: []
@@ -97,3 +97,6 @@ None.
   2. Database rows in `DatabasePanel.tsx` (previously button-less) now have the same "New Query" icon button connection rows already had, plus a second new one — "Open Last Used Query" (`History` icon) — that reuses `openLatestOrNewQuery` (previously only reachable via Ctrl+Enter on a focused node) with an explicit scope argument instead of reading `focusedNode`, so a click doesn't require a prior click-to-focus step. Connection rows gained the same "Open Last Used Query" button alongside their existing "New Query" one.
   3. New `components/QuerySearch.tsx` (Ctrl/Cmd+Shift+Q) — see `.specs/modules/shell.md`.
 - Task: `.specs/tasks/mysql-query-tabs.md`.
+- **Shipped 2026-10-01, user report — expand errors swallowed, and a stale-empty-cache bug.** `DatabasePanel.tsx`'s `toggleConn` does surface a `ListDatabases` failure (`testMsg` error banner), but `toggleDb`'s `ListTables` call (and the auto-expand-single-database path inside `toggleConn`) both do `.catch(() => [])` — a failed table listing silently renders as "no tables," indistinguishable from a database that's genuinely empty. Worse: on any `ListDatabases` failure, `databasesByConn[conn.id]` gets set to `[]` and the `!databasesByConn[conn.id]` guard that decides whether to re-fetch treats that cached empty array as "already loaded" forever after — collapsing and re-expanding the connection never retries, even once the MySQL server is reachable again. Confirmed by reading `database.go`'s `openConn`/`ListDatabases`/`ListTables`: every call already opens and closes a fresh `*sql.DB` per request (no backend-side pooling/caching to reconnect) — this is a frontend-only fix, not a backend change.
+- **Shipped 2026-10-01, user request — "Reconnect" on a connection's context menu.** Forces a fresh `ListDatabases` (and, for a locked single-database connection, `ListTables`) fetch for that connection: clears its cached databases/tables/error state first (so the stale-empty-cache bug above can't mask it), then re-runs the same expand logic as a first-time expand (`fetchConnDatabases`, extracted from `toggleConn`), expanding the row if it was collapsed. A normal right-click menu item (`ctxMenu`), alongside Rename/Move to folder — not a new menu or new backend method. Per-database errors now have their own state (`dbError`, keyed like `tablesByDb`) instead of being swallowed by `ListTables(...).catch(() => [])`; both failure paths (the `toggleDb` click, and the auto-expand-single-database branch inside `fetchConnDatabases`) go through one shared `fetchDbTables` helper.
+- Task: `.specs/tasks/db-connection-errors-and-reconnect.md`.
