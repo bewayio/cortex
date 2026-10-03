@@ -316,6 +316,38 @@ export default function Terminal({
     if (activeRightId) { const t = tabs.find(x => x.id === activeRightId); if (t) scheduleFit(t) }
   }, [rightWidth]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // `bottomHeight`/`rightWidth` só mudam ao arrastar a própria alça de resize
+  // do terminal — redimensionar a janela do app (ou qualquer outra mudança de
+  // layout que encolha/estique o wrapper sem passar por essas props, como o
+  // sidebar esquerdo sendo redimensionado) nunca chamava `fit()`. O xterm.js
+  // seguia achando que tinha o tamanho antigo e seu scroll interno ficava
+  // travado, cortando as últimas linhas (bug relatado pelo usuário, 2026-10-02).
+  // Um ResizeObserver no próprio wrapper cobre qualquer causa de resize, não
+  // só as duas já tratadas acima.
+  useEffect(() => {
+    const el = wrapperBottomRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      const id = activeBottomIdRef.current
+      const tab = id ? tabsRef.current.find(t => t.id === id) : undefined
+      if (tab) scheduleFit(tab)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [bottomContainer]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const el = wrapperRightRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      const id = activeRightIdRef.current
+      const tab = id ? tabsRef.current.find(t => t.id === id) : undefined
+      if (tab) scheduleFit(tab)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [rightContainer]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Ao ficar visível + workspaceId disponível sem abas — inicializa a partir do localStorage ou cria novo terminal.
   // Resolve o problema de timing onde Terminal monta com workspaceId='' e o useEffect([workspaceId]) não re-dispara.
   const initDoneRef = useRef(false)

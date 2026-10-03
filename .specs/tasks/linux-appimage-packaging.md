@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: tasks
-last_updated: 2026-10-01
-version: 4
+last_updated: 2026-10-03
+version: 7
 connections:
   parent: .specs/modules/release.md
   children: []
@@ -33,7 +33,7 @@ Reported 2026-09-30: running the current Linux binary fails with `error while lo
 - [ ] Release asset renamed from `bcode-linux-amd64.tar.gz` to `bcode-linux-x86_64.AppImage` (AppImage's own naming convention) everywhere it's referenced: the workflow's asset upload step, `checksums.txt` generation, and any existing docs/specs that name the old filename.
 - [ ] The "always latest" stable download URL for Linux (`.../releases/latest/download/bcode-linux-amd64.tar.gz`) is updated to the new AppImage filename, including in `.specs/modules/release.md`'s Notes where it's currently documented.
 - [ ] `checksums.txt` still contains one sha256 line per platform asset, now reflecting the AppImage instead of the tarball.
-- [ ] The launched AppImage spawns `WebKitNetworkProcess`/`WebKitWebProcess` from the bundled copy, not the system path — fixed 2026-10-01 (libexec dir bundled by hand + `WEBKIT_EXEC_PATH` via an `apprun-hooks` script), not yet re-verified on a real run.
+- [x] The launched AppImage spawns `WebKitNetworkProcess`/`WebKitWebProcess` from the bundled copy, not the system path. Four attempts, documented in full in `.specs/modules/release.md`'s 2026-10-01 through 2026-10-03 Notes: (1) `WEBKIT_EXEC_PATH` env var — wrong, doesn't exist; (2)+(3) same-length binary patch — right idea, broken by a Python assert bug then a wrong glob path, both fixed; (4) **local reproduction in disposable Docker containers** (not guessing from CI logs a fifth time) surfaced two more real bugs: `linuxdeploy`'s own `AppRun` doesn't `cd` anywhere (so the patched relative path resolved wrong) and its `--output appimage` silently regenerates `AppRun` from scratch (wiping a `cd` fix); fixed by hand-patching `AppDir/AppRun` (`cd` + `LD_LIBRARY_PATH`) and packaging with `appimagetool` directly instead. **Verified**: the resulting AppImage ran 10+ seconds without crashing in a clean Ubuntu 24.04 Docker container with zero webkit2gtk packages installed — the exact failure mode reported, reproduced and fixed locally. Not yet re-verified on the actual GitHub Actions runner.
 - [ ] A real CI run on `bewayio/code` confirms the Linux job builds and publishes the AppImage successfully (this module's Notes already show two prior Linux/macOS CI bugs, plus this WebKitNetworkProcess one, that only surfaced on a real run, not locally).
 
 ## Affected Modules
