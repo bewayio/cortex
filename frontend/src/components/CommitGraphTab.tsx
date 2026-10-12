@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Search, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import CommitGraphRow from './CommitGraph'
 import { computeGraph, LaneRow, GraphCommit } from '../utils/graphLayout'
 import { useWorkspaceStore } from '../stores/workspaceStore'
@@ -9,6 +10,7 @@ import { GitGraphLog } from '../../wailsjs/go/main/App'
 const PAGE = 100
 
 export default function CommitGraphTab() {
+  const { t } = useTranslation('git')
   const { currentWorkspace } = useWorkspaceStore()
   const { openOrFocusTab }   = useEditorStore()
 
@@ -68,14 +70,14 @@ export default function CommitGraphTab() {
     <div className="cgt-root">
       {/* Header */}
       <div className="cgt-header">
-        <span className="cgt-title">GRAPH</span>
+        <span className="cgt-title">{t('graphTab.title')}</span>
         {showSearch && (
           <div className="cgt-search-bar">
             <Search size={12} style={{ color: 'var(--fg-dim)', flexShrink: 0 }} />
             <input
               autoFocus
               className="cgt-search-input"
-              placeholder="Filter commits…"
+              placeholder={t('graphTab.filterPlaceholder')}
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Escape' && (setShowSearch(false), setQuery(''))}
@@ -88,7 +90,7 @@ export default function CommitGraphTab() {
             </button>
           </div>
         )}
-        <button className="cgt-icon-btn" title="Search (⌘F)"
+        <button className="cgt-icon-btn" title={t('graphTab.searchTitle')}
           onClick={() => setShowSearch(v => !v)} style={{ marginLeft: 'auto' }}>
           <Search size={13} />
         </button>
@@ -97,10 +99,10 @@ export default function CommitGraphTab() {
       {/* Graph list */}
       <div className="cgt-list">
         {loading && filtered.length === 0 && (
-          <div className="cgt-empty">Loading…</div>
+          <div className="cgt-empty">{t('loading')}</div>
         )}
         {!loading && filtered.length === 0 && (
-          <div className="cgt-empty">No commits match</div>
+          <div className="cgt-empty">{t('graphTab.noCommitsMatch')}</div>
         )}
         {filtered.map(row => (
           <CommitGraphRow key={row.commit.hash} row={row} onClick={() => openCommit(row)} />
@@ -108,7 +110,7 @@ export default function CommitGraphTab() {
         {hasMore && !query && (
           <button className="git-load-more" disabled={loading}
             onClick={() => { const n = limit + PAGE; setLimit(n); load(n) }}>
-            {loading ? 'Loading…' : `Load ${PAGE} more…`}
+            {loading ? t('loading') : t('loadMore', { count: PAGE })}
           </button>
         )}
       </div>

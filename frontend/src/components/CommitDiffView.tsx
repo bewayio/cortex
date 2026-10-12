@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { ChevronRight, ChevronDown, Search, X, FileText, GitBranch } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { EditorTab, CommitMeta, FileDiff, DiffLine } from '../types'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import { GitCommitMeta, GitCommitFileDiffs } from '../../wailsjs/go/main/App'
@@ -70,11 +71,12 @@ interface FileSectionProps {
 }
 
 function FileSection({ diff, expanded, onToggle, searchQuery }: FileSectionProps) {
+  const { t } = useTranslation('git')
   const rows = buildSideBySide(diff.lines)
 
   const getBadge = () => {
-    if (diff.kind === 'deleted') return <span className="commit-file-badge badge-deleted">DELETED</span>
-    if (diff.kind === 'added') return <span className="commit-file-badge badge-new">NEW</span>
+    if (diff.kind === 'deleted') return <span className="commit-file-badge badge-deleted">{t('diff.badgeDeleted')}</span>
+    if (diff.kind === 'added') return <span className="commit-file-badge badge-new">{t('diff.badgeNew')}</span>
     return null
   }
 
@@ -109,7 +111,7 @@ function FileSection({ diff, expanded, onToggle, searchQuery }: FileSectionProps
           {diff.kind === 'deleted' && (
             <div style={{ display: 'flex', fontFamily: "'SF Mono',monospace", fontSize: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="diff-column-header">antes</div>
+                <div className="diff-column-header">{t('diff.before')}</div>
                 {rows.map((row, i) => (
                   <div key={i} className={`commit-diff-row ${row.kind === 'remove' ? 'remove' : row.kind === 'hunk' ? 'hunk' : ''}`}>
                     <div className="commit-diff-half" style={{ borderRight: 'none' }}>
@@ -124,7 +126,7 @@ function FileSection({ diff, expanded, onToggle, searchQuery }: FileSectionProps
               </div>
               <div className="diff-divider" />
               <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div className="diff-column-header">— arquivo removido —</div>
+                <div className="diff-column-header">{t('diff.fileRemoved')}</div>
               </div>
             </div>
           )}
@@ -133,12 +135,12 @@ function FileSection({ diff, expanded, onToggle, searchQuery }: FileSectionProps
             <div style={{ display: 'flex', fontFamily: "'SF Mono',monospace", fontSize: 12 }}>
               <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
                 <div style={{ width: '100%' }}>
-                  <div className="diff-column-header">New file</div>
+                  <div className="diff-column-header">{t('diff.newFile')}</div>
                 </div>
               </div>
               <div className="diff-divider" />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="diff-column-header">depois</div>
+                <div className="diff-column-header">{t('diff.after')}</div>
                 {rows.map((row, i) => (
                   <div key={i} className={`commit-diff-row ${row.kind === 'add' ? 'add' : row.kind === 'hunk' ? 'hunk' : ''}`}>
                     <div className="commit-diff-half" style={{ borderRight: 'none' }}>
@@ -157,7 +159,7 @@ function FileSection({ diff, expanded, onToggle, searchQuery }: FileSectionProps
           {diff.kind === 'modified' && (
             <div style={{ display: 'flex', fontFamily: "'SF Mono',monospace", fontSize: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="diff-column-header">antes</div>
+                <div className="diff-column-header">{t('diff.before')}</div>
                 {rows.map((row, i) => (
                   <div key={i} className={`commit-diff-row ${row.kind === 'remove' || row.kind === 'change' ? 'remove' : row.kind === 'hunk' ? 'hunk' : ''}`}>
                     <div className="commit-diff-half">
@@ -172,7 +174,7 @@ function FileSection({ diff, expanded, onToggle, searchQuery }: FileSectionProps
               </div>
               <div className="diff-divider" />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="diff-column-header">depois</div>
+                <div className="diff-column-header">{t('diff.after')}</div>
                 {rows.map((row, i) => (
                   <div key={i} className={`commit-diff-row ${row.kind === 'add' || row.kind === 'change' ? 'add' : row.kind === 'hunk' ? 'hunk' : ''}`}>
                     <div className="commit-diff-half" style={{ borderRight: 'none' }}>
@@ -198,6 +200,7 @@ interface Props {
 }
 
 export default function CommitDiffView({ tab }: Props) {
+  const { t } = useTranslation('git')
   const { currentWorkspace } = useWorkspaceStore()
   // Usa o root guardado no tab para evitar race condition com currentWorkspace
   const workspaceRoot = tab.commitWorkspaceRoot
@@ -298,7 +301,7 @@ export default function CommitDiffView({ tab }: Props) {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--fg-dim)', fontSize: 13 }}>
-        Loading commit…
+        {t('commitDiff.loadingCommit')}
       </div>
     )
   }
@@ -306,7 +309,7 @@ export default function CommitDiffView({ tab }: Props) {
   if (!hash || (!meta && diffs.length === 0)) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--fg-dim)', fontSize: 13 }}>
-        {!hash ? 'No commit selected' : 'Could not load commit data'}
+        {!hash ? t('commitDiff.noCommitSelected') : t('commitDiff.couldNotLoad')}
       </div>
     )
   }
@@ -316,15 +319,15 @@ export default function CommitDiffView({ tab }: Props) {
       {/* Toolbar */}
       <div className="commit-diff-toolbar">
         <button className="commit-diff-toolbar-btn" onClick={toggleAll}>
-          {allExpanded ? 'Collapse All' : 'Expand All'}
+          {allExpanded ? t('commitDiff.collapseAll') : t('commitDiff.expandAll')}
         </button>
         <span className="commit-diff-file-count">
-          {filteredDiffs.length} file{filteredDiffs.length !== 1 ? 's' : ''}
+          {t('commitDiff.fileCount', { count: filteredDiffs.length })}
         </span>
         <button
           className="commit-diff-toolbar-btn"
           onClick={() => { setShowSearch(v => !v); setTimeout(() => searchRef.current?.focus(), 50) }}
-          title="Search (⌘+F)"
+          title={t('commitDiff.searchTitle')}
         >
           <Search size={14} />
         </button>
@@ -337,12 +340,12 @@ export default function CommitDiffView({ tab }: Props) {
           <input
             ref={searchRef}
             className="commit-diff-search-input"
-            placeholder="Search files or content…"
+            placeholder={t('commitDiff.searchPlaceholder')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
-            <span className="commit-diff-search-count">{matchCount} match{matchCount !== 1 ? 'es' : ''}</span>
+            <span className="commit-diff-search-count">{t('commitDiff.matchCount', { count: matchCount })}</span>
           )}
           <button onClick={() => { setShowSearch(false); setSearchQuery('') }}>
             <X size={14} style={{ color: 'var(--fg-dim)' }} />
@@ -373,7 +376,7 @@ export default function CommitDiffView({ tab }: Props) {
 
         {filteredDiffs.length === 0 && (
           <div style={{ padding: 24, color: 'var(--fg-dim)', textAlign: 'center' }}>
-            No files match your search.
+            {t('commitDiff.noFilesMatchSearch')}
           </div>
         )}
       </div>

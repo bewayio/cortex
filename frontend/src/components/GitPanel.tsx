@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ChevronRight, GitGraph } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useGitStore } from '../stores/gitStore'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import { useEditorStore } from '../stores/editorStore'
@@ -9,6 +10,7 @@ import CommitGraphRow from './CommitGraph'
 import { computeGraph, LaneRow, GraphCommit } from '../utils/graphLayout'
 
 export default function GitPanel() {
+  const { t } = useTranslation('git')
   const { changedFiles, commits, commitsLoading, hasMoreCommits, commitPageSize } = useGitStore()
   const { appendCommits, setCommitsLoading, setHasMoreCommits } = useGitStore()
   const { currentWorkspace } = useWorkspaceStore()
@@ -120,7 +122,7 @@ export default function GitPanel() {
             className={`git-section-chevron ${changesCollapsed ? 'collapsed' : ''}`}
             style={{ transform: changesCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
           />
-          Changes
+          {t('changes')}
           {changedFiles.length > 0 && (
             <span style={{ marginLeft: 4, color: '#e5c07b' }}>{changedFiles.length}</span>
           )}
@@ -129,7 +131,7 @@ export default function GitPanel() {
           <div className="git-section-content">
             {changedFiles.length === 0 ? (
               <div style={{ padding: '8px 12px', color: 'var(--fg-dim)', fontSize: 12 }}>
-                No changes
+                {t('noChanges')}
               </div>
             ) : (
               changedFiles.map(f => (
@@ -170,10 +172,10 @@ export default function GitPanel() {
             className={`git-section-chevron ${commitsCollapsed ? 'collapsed' : ''}`}
             style={{ transform: commitsCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}
           />
-          <span style={{ flex: 1 }}>Commits</span>
+          <span style={{ flex: 1 }}>{t('commits')}</span>
           <button
             className="sidebar-header-btn"
-            title="Open full graph in tab"
+            title={t('openFullGraph')}
             style={{ marginLeft: 'auto', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             onClick={e => { e.stopPropagation(); openGraphTab() }}
           >
@@ -184,7 +186,7 @@ export default function GitPanel() {
           <div className="git-section-content" style={{ flex: 1 }}>
             {graphRows.length === 0 && !graphLoading && (
               <div style={{ padding: '8px 12px', color: 'var(--fg-dim)', fontSize: 12 }}>
-                No commits found
+                {t('noCommitsFound')}
               </div>
             )}
             {graphRows.map(row => (
@@ -201,7 +203,7 @@ export default function GitPanel() {
             ))}
             {graphHasMore && (
               <button className="git-load-more" onClick={loadMoreGraph} disabled={graphLoading}>
-                {graphLoading ? 'Loading…' : 'Load 60 more…'}
+                {graphLoading ? t('loading') : t('loadMore', { count: 60 })}
               </button>
             )}
           </div>

@@ -1,7 +1,7 @@
 import React from 'react'
-import { FolderOpen, GitBranch, Terminal, Home, Database } from 'lucide-react'
+import { FolderOpen, GitBranch, Terminal, Database } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useGitStore } from '../stores/gitStore'
-import { useEditorStore } from '../stores/editorStore'
 
 type Panel = 'explorer' | 'git' | 'database'
 
@@ -12,36 +12,14 @@ interface Props {
 }
 
 export default function ActivityBar({ activePanel, onPanelChange, onToggleTerminal }: Props) {
+  const { t } = useTranslation('shell')
   const { changedFiles } = useGitStore()
-  const { getActiveTab, openOrFocusTab } = useEditorStore()
-  // Identificador interno (isUsageTab) mantido como está — renomear só o
-  // rótulo visível evita mexer em editorStore/EditorTabBar sem necessidade.
-  const homeTabActive = !!getActiveTab()?.isUsageTab
-
-  const openHomeTab = () => {
-    openOrFocusTab({
-      path: '__usage__',
-      name: 'Home',
-      ext: '', content: '', originalContent: '',
-      isModified: false, isCommitTab: false, isUsageTab: true,
-    })
-  }
 
   return (
     <div className="activity-bar">
-      {/* Não é um painel da sidebar — abre/foca a aba "Home" no editor,
-          no mesmo estilo do Git Graph. Primeiro ícone da barra. */}
-      <button
-        className={`activity-bar-btn ${homeTabActive ? 'active' : ''}`}
-        title="Home"
-        onClick={openHomeTab}
-      >
-        <Home size={20} />
-      </button>
-
       <button
         className={`activity-bar-btn ${activePanel === 'explorer' ? 'active' : ''}`}
-        title="Explorer (⌘+Shift+E)"
+        title={t('activityBar.explorer')}
         onClick={() => onPanelChange('explorer')}
       >
         <FolderOpen size={20} />
@@ -49,7 +27,7 @@ export default function ActivityBar({ activePanel, onPanelChange, onToggleTermin
 
       <button
         className={`activity-bar-btn ${activePanel === 'git' ? 'active' : ''}`}
-        title="Source Control"
+        title={t('activityBar.sourceControl')}
         onClick={() => onPanelChange('git')}
       >
         <GitBranch size={20} />
@@ -62,7 +40,7 @@ export default function ActivityBar({ activePanel, onPanelChange, onToggleTermin
 
       <button
         className={`activity-bar-btn ${activePanel === 'database' ? 'active' : ''}`}
-        title="Database"
+        title={t('activityBar.database')}
         onClick={() => onPanelChange('database')}
       >
         <Database size={20} />
@@ -70,7 +48,7 @@ export default function ActivityBar({ activePanel, onPanelChange, onToggleTermin
 
       <button
         className="activity-bar-btn"
-        title="Toggle Terminal (Ctrl+`)"
+        title={t('activityBar.toggleTerminal')}
         onClick={onToggleTerminal}
       >
         <Terminal size={20} />

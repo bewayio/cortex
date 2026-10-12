@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { FolderOpen, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import {
-  OpenDirectoryDialog, RemoveWorkspace, CloseWorkspace,
+  OpenDirectoryDialog, RemoveWorkspace, CloseWorkspace, ReorderRecentWorkspaces,
   GetRecentWorkspaces, GetEverOpenedWorkspaces,
 } from '../../wailsjs/go/main/App'
 
@@ -15,15 +16,23 @@ interface Props {
 }
 
 export default function WorkspaceList({ onOpenWorkspace, source = 'open' }: Props) {
+  const { t } = useTranslation('shell')
   const {
     recentWorkspaces, setRecentWorkspaces,
     everOpenedWorkspaces, setEverOpenedWorkspaces,
     currentWorkspace,
   } = useWorkspaceStore()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null)
+  // Arrastar pra reordenar — só em "Open projects" (sidebar). "Ever opened"
+  // (Home) continua uma lista de histórico, mais-recente-primeiro, sem
+  // reordenação manual. Mesma convenção de arrasto por mouse usada em
+  // EditorTabBar.tsx/Terminal.tsx (não HTML5 DnD).
+  const [dragFromIdx, setDragFromIdx] = useState<number | null>(null)
+  const [dropGap,     setDropGap]     = useState<number | null>(null)
+  const listContainerRef = useRef<HTMLDivElement>(null)
 
   const list = source === 'everOpened' ? everOpenedWorkspaces : recentWorkspaces
-  const label = source === 'everOpened' ? 'Ever Opened' : 'Open Projects'
+  const label = source === 'everOpened' ? t('workspaceList.everOpened') : t('workspaceList.openProjects')
 
   const refreshLists = async () => {
     const [recent, everOpened] = await Promise.all([
@@ -45,6 +54,47 @@ export default function WorkspaceList({ onOpenWorkspace, source = 'open' }: Prop
 
   const handleSelect = async (path: string) => {
     onOpenWorkspace(path)
+  }
+
+  const handleItemMouseDown = (e: React.MouseEvent, fromIdx: number) => {
+    if (source !== 'open' || e.button !== 0) return
+    e.preventDefault()
+    const startY = e.clientY
+    let moved = false
+    let curGap = fromIdx
+
+    const onMove = (ev: MouseEvent) => {
+      if (!moved && Math.abs(ev.clientY - startY) < 5) return
+      moved = true
+      const container = listContainerRef.current
+      if (!container) return
+      const items = Array.from(container.children).filter(c => c.classList.contains('workspace-item')) as HTMLElement[]
+      curGap = items.length
+      for (let i = 0; i < items.length; i++) {
+        const r = items[i].getBoundingClientRect()
+        if (ev.clientY < r.top + r.height / 2) { curGap = i; break }
+      }
+      setDragFromIdx(fromIdx)
+      setDropGap(curGap)
+    }
+
+    const onUp = () => {
+      if (moved && curGap !== fromIdx && curGap !== fromIdx + 1) {
+        const toIdx = curGap > fromIdx ? curGap - 1 : curGap
+        const reordered = [...recentWorkspaces]
+        const [w] = reordered.splice(fromIdx, 1)
+        reordered.splice(toIdx, 0, w)
+        setRecentWorkspaces(reordered)
+        ReorderRecentWorkspaces(reordered.map(w => w.id)).catch(console.error)
+      }
+      setDragFromIdx(null)
+      setDropGap(null)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
   }
 
   // Em "Open projects" (sidebar), remover só tira da lista rápida — o
@@ -70,7 +120,7 @@ export default function WorkspaceList({ onOpenWorkspace, source = 'open' }: Prop
       {source === 'open' && (
         <button className="workspace-open-btn" onClick={handleOpen}>
           <FolderOpen size={14} />
-          Open Folder…
+          {t('workspaceList.openFolder')}
         </button>
       )}
 
@@ -78,32 +128,44 @@ export default function WorkspaceList({ onOpenWorkspace, source = 'open' }: Prop
         <>
           <div className="section-label">{label}</div>
           {source === 'everOpened' && (
-            <div className="section-sublabel">Projects you've opened recently — click to reopen</div>
+            <div className="section-sublabel">{t('workspaceList.everOpenedSublabel')}</div>
           )}
-          {list.map(ws => (
-            <div
-              key={ws.id}
-              className={`workspace-item ${currentWorkspace?.path === ws.path ? 'active' : ''}`}
-              onClick={() => handleSelect(ws.path)}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                setContextMenu({ x: e.clientX, y: e.clientY, id: ws.id })
-              }}
-            >
-              <FolderOpen size={13} style={{ color: '#e5c07b', flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="workspace-item-name">{ws.name}</div>
-                <div className="workspace-item-path">{ws.path}</div>
-              </div>
-              <button
-                className="workspace-remove-btn"
-                onClick={(e) => { e.stopPropagation(); handleRemove(ws.id) }}
-                title={source === 'everOpened' ? 'Remove from history permanently' : 'Close (stays in Ever Opened history)'}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
+          <div ref={listContainerRef} style={{ userSelect: dragFromIdx !== null ? 'none' : undefined }}>
+            {list.map((ws, idx) => (
+              <React.Fragment key={ws.id}>
+                {dropGap === idx && dragFromIdx !== idx && dragFromIdx !== idx - 1 && (
+                  <div className="workspace-drop-indicator" />
+                )}
+                <div
+                  className={`workspace-item ${currentWorkspace?.path === ws.path ? 'active' : ''} ${dragFromIdx === idx ? 'dragging' : ''}`}
+                  onClick={() => handleSelect(ws.path)}
+                  onMouseDown={(e) => handleItemMouseDown(e, idx)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setContextMenu({ x: e.clientX, y: e.clientY, id: ws.id })
+                  }}
+                  style={source === 'open' ? { cursor: dragFromIdx !== null ? 'grabbing' : 'grab' } : undefined}
+                >
+                  <FolderOpen size={13} style={{ color: '#e5c07b', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="workspace-item-name">{ws.name}</div>
+                    <div className="workspace-item-path">{ws.path}</div>
+                  </div>
+                  <button
+                    className="workspace-remove-btn"
+                    onClick={(e) => { e.stopPropagation(); handleRemove(ws.id) }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    title={source === 'everOpened' ? t('workspaceList.removeFromHistory') : t('workspaceList.closeKeepHistory')}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </React.Fragment>
+            ))}
+            {dropGap === list.length && dragFromIdx !== list.length - 1 && (
+              <div className="workspace-drop-indicator" />
+            )}
+          </div>
         </>
       )}
 
@@ -115,7 +177,7 @@ export default function WorkspaceList({ onOpenWorkspace, source = 'open' }: Prop
           />
           <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x, zIndex: 9999 }}>
             <div className="context-menu-item danger" onClick={() => handleRemove(contextMenu.id)}>
-              <X size={14} /> {source === 'everOpened' ? 'Remove from history' : 'Close'}
+              <X size={14} /> {source === 'everOpened' ? t('workspaceList.removeFromHistoryShort') : t('common:close')}
             </div>
           </div>
         </>

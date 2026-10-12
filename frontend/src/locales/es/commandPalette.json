@@ -1,0 +1,16 @@
+{
+  "placeholder": "Escribe un comando…",
+  "noMatch": "Ningún comando coincide con \"{{query}}\"",
+  "commands": {
+    "newTerminal": "Nueva Terminal",
+    "newQuery": "Nueva Query",
+    "openFolder": "Abrir Carpeta",
+    "goToFile": "Ir a Archivo",
+    "toggleExplorer": "Alternar Panel del Explorador",
+    "toggleGit": "Alternar Panel de Git",
+    "toggleDatabase": "Alternar Panel de Base de Datos",
+    "goHome": "Ir a Inicio",
+    "closeTab": "Cerrar Pestaña",
+    "closeAllTabs": "Cerrar Todas las Pestañas"
+  }
+}

@@ -1,3 +1,5 @@
+import i18n from '../i18n'
+
 // ── Mermaid ───────────────────────────────────────────────────────────────────
 
 let mermaidReady = false
@@ -85,7 +87,7 @@ function openLightbox(svgContent: string) {
 }
 
 export async function renderMermaid(container: HTMLElement, code: string): Promise<void> {
-  container.innerHTML = '<span style="color:var(--fg-dim);font-size:11px">Rendering…</span>'
+  container.innerHTML = `<span style="color:var(--fg-dim);font-size:11px">${i18n.t('editor:diagrams.rendering')}</span>`
   try {
     const m = await getMermaid()
     const id = `mmd-${++mermaidSeq}-${Date.now()}`
@@ -107,14 +109,14 @@ export async function renderMermaid(container: HTMLElement, code: string): Promi
 
     const hint = document.createElement('div')
     hint.className = 'diagram-hint'
-    hint.textContent = '🔍 Click to expand'
+    hint.textContent = `🔍 ${i18n.t('editor:diagrams.clickToExpand')}`
 
     container.appendChild(thumb)
     container.appendChild(hint)
     container.style.cursor = 'zoom-in'
     container.addEventListener('click', () => openLightbox(svg))
   } catch (e) {
-    container.innerHTML = `<pre style="color:#e06c75;font-size:11px">Mermaid error: ${e}</pre>`
+    container.innerHTML = `<pre style="color:#e06c75;font-size:11px">${i18n.t('editor:diagrams.mermaidError', { error: e })}</pre>`
   }
 }
 
@@ -159,7 +161,7 @@ async function encodePlantUML(text: string): Promise<string> {
 }
 
 export async function renderPlantUML(container: HTMLElement, code: string): Promise<void> {
-  container.innerHTML = '<span style="color:var(--fg-dim);font-size:11px">Rendering…</span>'
+  container.innerHTML = `<span style="color:var(--fg-dim);font-size:11px">${i18n.t('editor:diagrams.rendering')}</span>`
   try {
     const wrapped = code.trimStart().startsWith('@')
       ? code
@@ -173,20 +175,20 @@ export async function renderPlantUML(container: HTMLElement, code: string): Prom
 
     const img = document.createElement('img')
     img.src = url
-    img.alt = 'PlantUML diagram'
+    img.alt = i18n.t('editor:diagrams.plantumlAlt')
     img.style.cssText = 'max-width:100%;max-height:200px;border-radius:4px;object-fit:contain;'
 
     const hint = document.createElement('div')
     hint.className = 'diagram-hint'
-    hint.textContent = '🔍 Click to expand'
+    hint.textContent = `🔍 ${i18n.t('editor:diagrams.clickToExpand')}`
 
     container.appendChild(img)
     container.appendChild(hint)
 
     container.addEventListener('click', () => {
-      openLightbox(`<img src="${url}" alt="PlantUML" style="max-width:85vw;max-height:80vh;" />`)
+      openLightbox(`<img src="${url}" alt="${i18n.t('editor:diagrams.plantumlAlt')}" style="max-width:85vw;max-height:80vh;" />`)
     })
   } catch (e) {
-    container.innerHTML = `<pre style="color:#e06c75;font-size:11px">PlantUML error: ${e}</pre>`
+    container.innerHTML = `<pre style="color:#e06c75;font-size:11px">${i18n.t('editor:diagrams.plantumlError', { error: e })}</pre>`
   }
 }

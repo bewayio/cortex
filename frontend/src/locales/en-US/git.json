@@ -1,0 +1,37 @@
+{
+  "changes": "Changes",
+  "noChanges": "No changes",
+  "commits": "Commits",
+  "openFullGraph": "Open full graph in tab",
+  "noCommitsFound": "No commits found",
+  "loading": "Loading…",
+  "loadMore": "Load {{count}} more…",
+  "diff": {
+    "badgeDeleted": "DELETED",
+    "badgeNew": "NEW",
+    "before": "before",
+    "after": "after",
+    "fileRemoved": "— file removed —",
+    "newFile": "New file"
+  },
+  "commitDiff": {
+    "loadingCommit": "Loading commit…",
+    "noCommitSelected": "No commit selected",
+    "couldNotLoad": "Could not load commit data",
+    "collapseAll": "Collapse All",
+    "expandAll": "Expand All",
+    "fileCount_one": "{{count}} file",
+    "fileCount_other": "{{count}} files",
+    "searchTitle": "Search (⌘+F)",
+    "searchPlaceholder": "Search files or content…",
+    "matchCount_one": "{{count}} match",
+    "matchCount_other": "{{count}} matches",
+    "noFilesMatchSearch": "No files match your search."
+  },
+  "graphTab": {
+    "title": "GRAPH",
+    "filterPlaceholder": "Filter commits…",
+    "searchTitle": "Search (⌘F)",
+    "noCommitsMatch": "No commits match"
+  }
+}

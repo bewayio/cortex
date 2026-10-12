@@ -1,0 +1,21 @@
+{
+  "confirmDelete": {
+    "one": "Delete <b>{{name}}</b>?",
+    "many": "Delete <b>{{count}} items</b>?"
+  },
+  "contextMenu": {
+    "open": "Open",
+    "rename": "Rename",
+    "copyPath": "Copy Path",
+    "revealInFinder": "Reveal in Finder",
+    "deleteCount": "Delete {{count}} items"
+  },
+  "create": {
+    "folderNamePlaceholder": "folder name",
+    "fileNamePlaceholder": "file name"
+  },
+  "fileSearch": {
+    "placeholder": "Search files…",
+    "noMatch": "No files match \"{{query}}\""
+  }
+}

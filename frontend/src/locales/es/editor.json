@@ -1,0 +1,32 @@
+{
+  "empty": {
+    "openFileToStart": "Abre un archivo para empezar a editar"
+  },
+  "overwrite": {
+    "title": "Archivo modificado externamente",
+    "message": "<b>{{name}}</b> fue modificado fuera de la app mientras tenías cambios sin guardar aquí. Guardar ahora sobrescribe ese cambio externo.",
+    "saveAnyway": "Guardar de Todas Formas"
+  },
+  "tabBar": {
+    "externallyChanged": "Cambió en disco fuera de la app — no se recargó porque esta pestaña tiene cambios sin guardar",
+    "modeCode": "Código (⌘+1)",
+    "modePreview": "Vista Previa",
+    "modeDiff": "Diff (⌘+2)",
+    "unpinTab": "Desanclar Pestaña",
+    "pinTab": "Anclar Pestaña",
+    "closeOthers": "Cerrar Otras",
+    "closeAll": "Cerrar Todas",
+    "copyPath": "Copiar Ruta",
+    "commitTitle": "Commit {{hash}}"
+  },
+  "markdownPreview": {
+    "renderFailed": "Error al renderizar el markdown."
+  },
+  "diagrams": {
+    "rendering": "Renderizando…",
+    "clickToExpand": "Haz clic para expandir",
+    "mermaidError": "Error de Mermaid: {{error}}",
+    "plantumlError": "Error de PlantUML: {{error}}",
+    "plantumlAlt": "Diagrama PlantUML"
+  }
+}

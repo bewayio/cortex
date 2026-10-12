@@ -83,4 +83,12 @@ export interface EditorTab {
   dbConnectionId?: string
   dbDatabase?: string
   savedQueryId?: string
+  pinned?: boolean
+  // Arquivo mudou no disco por fora enquanto a aba tinha alteração local não
+  // salva (não foi recarregado sozinho, pra não descartar o que o usuário
+  // digitou) — indicador discreto na aba. Ver .specs/tasks/file-watching-auto-reload.md.
+  externallyChanged?: boolean
+  isTableTab?: boolean
+  isDbTablesTab?: boolean
+  dbTable?: string
 }

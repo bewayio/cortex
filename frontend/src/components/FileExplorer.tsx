@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ChevronRight, Folder, FolderOpen, FileText, Code, FileJson } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 import { FileNode } from '../types'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import { useEditorStore } from '../stores/editorStore'
@@ -42,6 +43,20 @@ function ancestorPaths(path: string): string[] {
   return r
 }
 
+// Busca em toda a árvore, não só nos nós visíveis — ao contrário de
+// flatList (que exclui filhos de pastas colapsadas), triggerCreate precisa
+// achar a pasta selecionada mesmo que um ancestral dela esteja colapsado.
+function findNodeByPath(nodes: FileNode[], path: string): FileNode | undefined {
+  for (const n of nodes) {
+    if (n.path === path) return n
+    if (n.isDir && n.children) {
+      const found = findNodeByPath(n.children, path)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
 function flattenVisible(nodes: FileNode[], expanded: Set<string>): FileNode[] {
   const r: FileNode[] = []
   for (const n of nodes) {
@@ -67,6 +82,7 @@ function isPathInsideOrEqual(path: string, maybeAncestor: string): boolean {
 }
 
 export default function FileExplorer({ actionRef }: Props) {
+  const { t } = useTranslation('explorer')
   const { currentWorkspace, fileTree, setFileTree } = useWorkspaceStore()
   const { openOrFocusTab, tabs, activeTabId } = useEditorStore()
 
@@ -100,14 +116,22 @@ export default function FileExplorer({ actionRef }: Props) {
     if (tree) setFileTree(tree)
   }, [currentWorkspace, setFileTree])
 
+  // Auto-expande as pastas de primeiro nível só na primeira carga de CADA
+  // workspace — não a cada refresh da árvore. Sem essa guarda, qualquer
+  // atualização (ex: o watcher de arquivos reconsultando a árvore quando
+  // algo muda por fora) reexpandia tudo, desfazendo um collapse manual do
+  // usuário (bug relatado pelo usuário, 2026-10-12).
+  const expandedWorkspaceRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!fileTree) return
+    if (!fileTree || !currentWorkspace) return
+    if (expandedWorkspaceRef.current === currentWorkspace.path) return
+    expandedWorkspaceRef.current = currentWorkspace.path
     setExpandedPaths(prev => {
       const n = new Set(prev)
       fileTree.children?.filter(c => c.isDir).forEach(c => n.add(c.path))
       return n
     })
-  }, [fileTree])
+  }, [fileTree, currentWorkspace])
 
   const toggleDir = useCallback((path: string) => {
     setExpandedPaths(prev => { const n = new Set(prev); n.has(path) ? n.delete(path) : n.add(path); return n })
@@ -134,8 +158,8 @@ export default function FileExplorer({ actionRef }: Props) {
 
   // ── Internal actions (lidos via actionsRef — sem stale closure) ─────────
   // O ref é atualizado a cada render para capturar o estado mais recente
-  const internalRef = useRef({ focusedPath, activePath, currentWorkspace })
-  internalRef.current = { focusedPath, activePath, currentWorkspace }
+  const internalRef = useRef({ focusedPath, activePath, currentWorkspace, fileTree })
+  internalRef.current = { focusedPath, activePath, currentWorkspace, fileTree }
 
   // ── Expõe ações ao pai via actionRef ─────────────────────────────────
   useEffect(() => {
@@ -148,15 +172,27 @@ export default function FileExplorer({ actionRef }: Props) {
   })
 
   function triggerCreate(isDir: boolean) {
-    const { focusedPath: fp, activePath: ap, currentWorkspace: ws } = internalRef.current
+    const { focusedPath: fp, activePath: ap, currentWorkspace: ws, fileTree: ft } = internalRef.current
     const base = fp ?? ap
     let parentDir = ws?.path ?? ''
     if (base) {
-      const node = flatList.find(n => n.path === base)
-      if (node?.isDir && expandedPaths.has(node.path)) parentDir = node.path
+      // Busca na árvore inteira, não só em flatList (nós visíveis) — uma
+      // pasta selecionada cujo ancestral está colapsado não aparece em
+      // flatList, o que fazia cair no `else` e criar como irmã em vez de
+      // dentro dela (bug relatado pelo usuário, 2026-10-12).
+      const node = ft?.children ? findNodeByPath(ft.children, base) : undefined
+      // Pasta selecionada: cria DENTRO dela, esteja expandida ou não — antes
+      // só considerava o alvo se já estivesse expandida, criando como irmã
+      // em vez de dentro quando colapsada (bug relatado pelo usuário,
+      // 2026-10-11). commitCreate já expande o parentDir depois de criar.
+      if (node?.isDir) parentDir = node.path
       else parentDir = base.split('/').slice(0, -1).join('/')
     }
     setCreating({ parentDir, isDir, name: '' })
+    // Expande a pasta-alvo já na hora de abrir o input, não só depois de criar
+    // — senão a linha de criação (agora posicionada dentro da pasta, não mais
+    // fixa no topo) ficaria escondida se a pasta estivesse colapsada.
+    setExpandedPaths(prev => new Set([...prev, parentDir]))
     setTimeout(() => createInputRef.current?.focus(), 0)
   }
 
@@ -335,34 +371,18 @@ export default function FileExplorer({ actionRef }: Props) {
           <div className="ft-confirm-dialog">
             <div className="ft-confirm-msg">
               {confirmDel.paths.length === 1
-                ? <>Delete <strong>{confirmDel.names[0]}</strong>?</>
-                : <>Delete <strong>{confirmDel.paths.length} items</strong>?</>
+                ? <Trans t={t} i18nKey="confirmDelete.one" values={{ name: confirmDel.names[0] }} components={{ b: <strong /> }} />
+                : <Trans t={t} i18nKey="confirmDelete.many" values={{ count: confirmDel.paths.length }} components={{ b: <strong /> }} />
               }
             </div>
             <div className="ft-confirm-actions">
-              <button className="ft-confirm-btn cancel" onClick={() => setConfirmDel(null)}>Cancel</button>
-              <button className="ft-confirm-btn danger" onClick={executeDelete}>Delete</button>
+              <button className="ft-confirm-btn cancel" onClick={() => setConfirmDel(null)}>{t('common:cancel')}</button>
+              <button className="ft-confirm-btn danger" onClick={executeDelete}>{t('common:delete')}</button>
             </div>
           </div>
         </div>
       )}
-      {creating && (
-        <div className="file-tree-create-row">
-          {creating.isDir ? <Folder size={14} style={{ color: '#e5c07b', flexShrink: 0 }} /> : <FileText size={14} style={{ color: '#858585', flexShrink: 0 }} />}
-          <input
-            ref={createInputRef}
-            className="file-tree-inline-input"
-            value={creating.name}
-            placeholder={creating.isDir ? 'folder name' : 'file name'}
-            onChange={e => setCreating({ ...creating, name: e.target.value })}
-            onKeyDown={e => {
-              if (e.key === 'Enter')  { e.preventDefault(); commitCreate() }
-              if (e.key === 'Escape') { e.preventDefault(); setCreating(null) }
-            }}
-            onBlur={commitCreate}
-          />
-        </div>
-      )}
+      {creating && creating.parentDir === currentWorkspace?.path && renderCreatingRow(0)}
 
       {renderNodes(fileTree.children ?? [], 0)}
 
@@ -370,11 +390,11 @@ export default function FileExplorer({ actionRef }: Props) {
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setCtxMenu(null)} />
           <div className="context-menu" style={{ top: ctxMenu.y, left: ctxMenu.x }}>
-            {!ctxMenu.node.isDir && <div className="context-menu-item" onClick={() => { openFile(ctxMenu.node); setCtxMenu(null) }}>Open</div>}
-            <div className="context-menu-item" onClick={() => { setRenaming({ path: ctxMenu.node.path, name: ctxMenu.node.name }); setTimeout(() => { renameInputRef.current?.focus(); renameInputRef.current?.select() }, 0); setCtxMenu(null) }}>Rename</div>
-            <div className="context-menu-item" onClick={() => { navigator.clipboard.writeText(ctxMenu.node.path); setCtxMenu(null) }}>Copy Path</div>
+            {!ctxMenu.node.isDir && <div className="context-menu-item" onClick={() => { openFile(ctxMenu.node); setCtxMenu(null) }}>{t('contextMenu.open')}</div>}
+            <div className="context-menu-item" onClick={() => { setRenaming({ path: ctxMenu.node.path, name: ctxMenu.node.name }); setTimeout(() => { renameInputRef.current?.focus(); renameInputRef.current?.select() }, 0); setCtxMenu(null) }}>{t('contextMenu.rename')}</div>
+            <div className="context-menu-item" onClick={() => { navigator.clipboard.writeText(ctxMenu.node.path); setCtxMenu(null) }}>{t('contextMenu.copyPath')}</div>
             <div className="context-menu-separator" />
-            <div className="context-menu-item" onClick={async () => { await RevealInFinder(ctxMenu.node.path).catch(console.error); setCtxMenu(null) }}>Reveal in Finder</div>
+            <div className="context-menu-item" onClick={async () => { await RevealInFinder(ctxMenu.node.path).catch(console.error); setCtxMenu(null) }}>{t('contextMenu.revealInFinder')}</div>
             <div className="context-menu-separator" />
             <div className="context-menu-item danger" onClick={() => {
               const paths = selectedPaths.size > 1 && selectedPaths.has(ctxMenu.node.path)
@@ -384,13 +404,38 @@ export default function FileExplorer({ actionRef }: Props) {
               setConfirmDel(paths)
             }}>
               {selectedPaths.size > 1 && selectedPaths.has(ctxMenu.node.path)
-                ? `Delete ${selectedPaths.size} items` : 'Delete'}
+                ? t('contextMenu.deleteCount', { count: selectedPaths.size }) : t('common:delete')}
             </div>
           </div>
         </>
       )}
     </div>
   )
+
+  // Linha de criação inline — renderizada na posição real dentro da pasta
+  // alvo (raiz ou uma subpasta), não fixa no topo da árvore, pra não
+  // confundir o usuário sobre onde o item vai ser criado (bug relatado
+  // pelo usuário, 2026-10-12).
+  function renderCreatingRow(depth: number) {
+    if (!creating) return null
+    return (
+      <div className="file-tree-create-row" style={{ paddingLeft: depth * 12 + 4 + (creating.isDir ? 0 : 16) }}>
+        {creating.isDir ? <Folder size={14} style={{ color: '#e5c07b', flexShrink: 0 }} /> : <FileText size={14} style={{ color: '#858585', flexShrink: 0 }} />}
+        <input
+          ref={createInputRef}
+          className="file-tree-inline-input"
+          value={creating.name}
+          placeholder={creating.isDir ? t('create.folderNamePlaceholder') : t('create.fileNamePlaceholder')}
+          onChange={e => setCreating({ ...creating, name: e.target.value })}
+          onKeyDown={e => {
+            if (e.key === 'Enter')  { e.preventDefault(); commitCreate() }
+            if (e.key === 'Escape') { e.preventDefault(); setCreating(null) }
+          }}
+          onBlur={commitCreate}
+        />
+      </div>
+    )
+  }
 
   function renderNodes(nodes: FileNode[], depth: number): React.ReactNode {
     return nodes.map(node => (
@@ -421,7 +466,12 @@ export default function FileExplorer({ actionRef }: Props) {
           </span>
           <span className="file-tree-item-name">{node.name}</span>
         </div>
-        {expanded && node.children && renderNodes(node.children, depth + 1)}
+        {expanded && (
+          <>
+            {creating && creating.parentDir === node.path && renderCreatingRow(depth + 1)}
+            {node.children && renderNodes(node.children, depth + 1)}
+          </>
+        )}
       </div>
     )
   }

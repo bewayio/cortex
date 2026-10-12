@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Search } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import { FileNode } from '../types'
 
@@ -25,6 +26,7 @@ function score(file: FileNode, q: string): number {
 }
 
 export default function FileSearch({ onClose, onSelect }: Props) {
+  const { t } = useTranslation('explorer')
   const { fileTree } = useWorkspaceStore()
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
@@ -90,7 +92,7 @@ export default function FileSearch({ onClose, onSelect }: Props) {
           <input
             ref={inputRef}
             className="file-search-input"
-            placeholder="Search files…"
+            placeholder={t('fileSearch.placeholder')}
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -114,7 +116,9 @@ export default function FileSearch({ onClose, onSelect }: Props) {
         )}
 
         {results.length === 0 && query && (
-          <div className="file-search-empty">No files match "{query}"</div>
+          <div className="file-search-empty">
+            <Trans t={t} i18nKey="fileSearch.noMatch" values={{ query }} />
+          </div>
         )}
       </div>
     </div>

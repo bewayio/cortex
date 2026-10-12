@@ -63,6 +63,77 @@ type ColumnInfo struct {
 	Key      string `json:"key"`
 }
 
+// ConstraintInfo is a table-level constraint (PK, UNIQUE, CHECK) — FKs have
+// their own richer ForeignKeyInfo instead, even though they're technically
+// also rows in table_constraints.
+type ConstraintInfo struct {
+	Name    string   `json:"name"`
+	Type    string   `json:"type"` // PRIMARY KEY, UNIQUE, CHECK
+	Columns []string `json:"columns"`
+}
+
+// ForeignKeyInfo is used both ways: outbound (this table's own FKs) and
+// inbound ("References" — other tables' FKs that point at this one). Which
+// one a given slice holds is determined by which query filled it, not by a
+// field on the struct itself.
+type ForeignKeyInfo struct {
+	Name             string `json:"name"`
+	Column           string `json:"column"`
+	ReferencedTable  string `json:"referencedTable"`
+	ReferencedColumn string `json:"referencedColumn"`
+	ReferencedSchema string `json:"referencedSchema"`
+	OnUpdate         string `json:"onUpdate"`
+	OnDelete         string `json:"onDelete"`
+}
+
+type TriggerInfo struct {
+	Name      string `json:"name"`
+	Timing    string `json:"timing"` // BEFORE, AFTER
+	Event     string `json:"event"`  // INSERT, UPDATE, DELETE
+	Statement string `json:"statement"`
+}
+
+type IndexInfo struct {
+	Name    string   `json:"name"`
+	Unique  bool     `json:"unique"`
+	Type    string   `json:"type"` // BTREE, HASH, ...
+	Columns []string `json:"columns"`
+}
+
+type PartitionInfo struct {
+	Name        string `json:"name"`
+	Method      string `json:"method"` // RANGE, LIST, HASH, KEY
+	Expression  string `json:"expression"`
+	Description string `json:"description"`
+	Rows        int64  `json:"rows"`
+}
+
+type TableStatistics struct {
+	Engine        string `json:"engine"`
+	RowsEstimate  int64  `json:"rowsEstimate"`
+	DataLength    int64  `json:"dataLength"`
+	IndexLength   int64  `json:"indexLength"`
+	AvgRowLength  int64  `json:"avgRowLength"`
+	AutoIncrement int64  `json:"autoIncrement"`
+	Collation     string `json:"collation"`
+	CreatedAt     string `json:"createdAt"`
+	UpdatedAt     string `json:"updatedAt"`
+}
+
+// TableDetails backs the table tab's Properties sub-tab — one combined
+// fetch (GetTableDetails) rather than one Wails-bound round trip per
+// section, since they're always viewed together.
+type TableDetails struct {
+	Constraints []ConstraintInfo `json:"constraints"`
+	ForeignKeys []ForeignKeyInfo `json:"foreignKeys"`
+	References  []ForeignKeyInfo `json:"references"`
+	Triggers    []TriggerInfo    `json:"triggers"`
+	Indexes     []IndexInfo      `json:"indexes"`
+	Partitions  []PartitionInfo  `json:"partitions"`
+	Statistics  TableStatistics  `json:"statistics"`
+	DDL         string           `json:"ddl"`
+}
+
 type QueryResult struct {
 	Columns      []string        `json:"columns"`
 	Rows         [][]interface{} `json:"rows"`
@@ -443,6 +514,242 @@ func (a *App) DescribeTable(connectionID, database, table string) ([]ColumnInfo,
 		out = append(out, ColumnInfo{
 			Name: name, Type: colType, Nullable: nullable == "YES", Key: key,
 		})
+	}
+	return out, rows.Err()
+}
+
+// quoteIdent wraps a MySQL identifier in backticks, doubling any backtick
+// already inside it — the standard MySQL identifier-escaping rule. Needed
+// for SHOW CREATE TABLE, since identifiers can't be bound as query
+// parameters the way values can.
+func quoteIdent(s string) string {
+	return "`" + strings.ReplaceAll(s, "`", "``") + "`"
+}
+
+// GetTableDetails backs the table tab's Properties sub-tab: one opened
+// connection, several information_schema queries plus SHOW CREATE TABLE,
+// instead of one Wails-bound round trip per section (DescribeTable's
+// existing one-round-trip-per-view precedent).
+func (a *App) GetTableDetails(connectionID, database, table string) (TableDetails, error) {
+	// Every slice starts non-nil — a Go nil slice marshals to JSON `null`,
+	// not `[]`, which crashed the frontend (`details.foreignKeys.length` on
+	// `null`) for any section with zero rows. Initialized upfront so a
+	// query that finds nothing just never appends, instead of every call
+	// site needing its own empty-slice fallback.
+	details := TableDetails{
+		Constraints: []ConstraintInfo{},
+		ForeignKeys: []ForeignKeyInfo{},
+		References:  []ForeignKeyInfo{},
+		Triggers:    []TriggerInfo{},
+		Indexes:     []IndexInfo{},
+		Partitions:  []PartitionInfo{},
+	}
+
+	db, _, err := openConn(connectionID, "")
+	if err != nil {
+		return details, err
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// Constraints (PK, UNIQUE, CHECK) — FKs are also rows here but get their
+	// own richer query below instead.
+	constraintRows, err := db.QueryContext(ctx,
+		`SELECT tc.constraint_name, tc.constraint_type, kcu.column_name
+		 FROM information_schema.table_constraints tc
+		 JOIN information_schema.key_column_usage kcu
+		   ON tc.constraint_name = kcu.constraint_name
+		  AND tc.table_schema = kcu.table_schema
+		  AND tc.table_name = kcu.table_name
+		 WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type != 'FOREIGN KEY'
+		 ORDER BY tc.constraint_name, kcu.ordinal_position`,
+		database, table)
+	if err != nil {
+		return details, err
+	}
+	constraintsByName := map[string]*ConstraintInfo{}
+	var constraintOrder []string
+	for constraintRows.Next() {
+		var name, ctype, col string
+		if err := constraintRows.Scan(&name, &ctype, &col); err != nil {
+			continue
+		}
+		c, ok := constraintsByName[name]
+		if !ok {
+			c = &ConstraintInfo{Name: name, Type: ctype}
+			constraintsByName[name] = c
+			constraintOrder = append(constraintOrder, name)
+		}
+		c.Columns = append(c.Columns, col)
+	}
+	constraintRows.Close()
+	if err := constraintRows.Err(); err != nil {
+		return details, err
+	}
+	for _, name := range constraintOrder {
+		details.Constraints = append(details.Constraints, *constraintsByName[name])
+	}
+
+	// Foreign keys (outbound) — this table's own FKs pointing at others.
+	fks, err := queryForeignKeys(ctx, db,
+		`SELECT kcu.constraint_name, kcu.column_name, kcu.referenced_table_schema,
+		        kcu.referenced_table_name, kcu.referenced_column_name,
+		        rc.update_rule, rc.delete_rule
+		 FROM information_schema.key_column_usage kcu
+		 JOIN information_schema.referential_constraints rc
+		   ON kcu.constraint_name = rc.constraint_name AND kcu.table_schema = rc.constraint_schema
+		 WHERE kcu.table_schema = ? AND kcu.table_name = ? AND kcu.referenced_table_name IS NOT NULL
+		 ORDER BY kcu.constraint_name, kcu.ordinal_position`,
+		database, table)
+	if err != nil {
+		return details, err
+	}
+	details.ForeignKeys = fks
+
+	// References (inbound) — other tables' FKs that point at this one.
+	refs, err := queryForeignKeys(ctx, db,
+		`SELECT kcu.constraint_name, kcu.column_name, kcu.table_schema,
+		        kcu.table_name, kcu.referenced_column_name,
+		        rc.update_rule, rc.delete_rule
+		 FROM information_schema.key_column_usage kcu
+		 JOIN information_schema.referential_constraints rc
+		   ON kcu.constraint_name = rc.constraint_name AND kcu.table_schema = rc.constraint_schema
+		 WHERE kcu.referenced_table_schema = ? AND kcu.referenced_table_name = ?
+		 ORDER BY kcu.constraint_name, kcu.ordinal_position`,
+		database, table)
+	if err != nil {
+		return details, err
+	}
+	details.References = refs
+
+	// Triggers.
+	triggerRows, err := db.QueryContext(ctx,
+		`SELECT trigger_name, action_timing, event_manipulation, action_statement
+		 FROM information_schema.triggers
+		 WHERE event_object_schema = ? AND event_object_table = ?
+		 ORDER BY trigger_name`,
+		database, table)
+	if err != nil {
+		return details, err
+	}
+	for triggerRows.Next() {
+		var t TriggerInfo
+		if err := triggerRows.Scan(&t.Name, &t.Timing, &t.Event, &t.Statement); err != nil {
+			continue
+		}
+		details.Triggers = append(details.Triggers, t)
+	}
+	triggerRows.Close()
+	if err := triggerRows.Err(); err != nil {
+		return details, err
+	}
+
+	// Index — information_schema.statistics (also index cardinality, but
+	// per-column cardinality isn't surfaced here, just name/uniqueness/type).
+	idxRows, err := db.QueryContext(ctx,
+		`SELECT index_name, non_unique, index_type, column_name
+		 FROM information_schema.statistics
+		 WHERE table_schema = ? AND table_name = ?
+		 ORDER BY index_name, seq_in_index`,
+		database, table)
+	if err != nil {
+		return details, err
+	}
+	indexByName := map[string]*IndexInfo{}
+	var indexOrder []string
+	for idxRows.Next() {
+		var name, idxType, col string
+		var nonUnique int
+		if err := idxRows.Scan(&name, &nonUnique, &idxType, &col); err != nil {
+			continue
+		}
+		idx, ok := indexByName[name]
+		if !ok {
+			idx = &IndexInfo{Name: name, Unique: nonUnique == 0, Type: idxType}
+			indexByName[name] = idx
+			indexOrder = append(indexOrder, name)
+		}
+		idx.Columns = append(idx.Columns, col)
+	}
+	idxRows.Close()
+	if err := idxRows.Err(); err != nil {
+		return details, err
+	}
+	for _, name := range indexOrder {
+		details.Indexes = append(details.Indexes, *indexByName[name])
+	}
+
+	// Partitions — empty slice (not an error) for a non-partitioned table.
+	partRows, err := db.QueryContext(ctx,
+		`SELECT partition_name, COALESCE(partition_method, ''), COALESCE(partition_expression, ''),
+		        COALESCE(partition_description, ''), COALESCE(table_rows, 0)
+		 FROM information_schema.partitions
+		 WHERE table_schema = ? AND table_name = ? AND partition_name IS NOT NULL
+		 ORDER BY partition_ordinal_position`,
+		database, table)
+	if err != nil {
+		return details, err
+	}
+	for partRows.Next() {
+		var p PartitionInfo
+		if err := partRows.Scan(&p.Name, &p.Method, &p.Expression, &p.Description, &p.Rows); err != nil {
+			continue
+		}
+		details.Partitions = append(details.Partitions, p)
+	}
+	partRows.Close()
+	if err := partRows.Err(); err != nil {
+		return details, err
+	}
+
+	// Statistics.
+	err = db.QueryRowContext(ctx,
+		`SELECT engine, COALESCE(table_rows, 0), COALESCE(data_length, 0), COALESCE(index_length, 0),
+		        COALESCE(avg_row_length, 0), COALESCE(auto_increment, 0), COALESCE(table_collation, ''),
+		        COALESCE(create_time, ''), COALESCE(update_time, '')
+		 FROM information_schema.tables
+		 WHERE table_schema = ? AND table_name = ?`,
+		database, table,
+	).Scan(&details.Statistics.Engine, &details.Statistics.RowsEstimate, &details.Statistics.DataLength,
+		&details.Statistics.IndexLength, &details.Statistics.AvgRowLength, &details.Statistics.AutoIncrement,
+		&details.Statistics.Collation, &details.Statistics.CreatedAt, &details.Statistics.UpdatedAt)
+	if err != nil {
+		return details, err
+	}
+
+	// DDL.
+	var ddlTableName, ddl string
+	err = db.QueryRowContext(ctx,
+		"SHOW CREATE TABLE "+quoteIdent(database)+"."+quoteIdent(table),
+	).Scan(&ddlTableName, &ddl)
+	if err != nil {
+		return details, err
+	}
+	details.DDL = ddl
+
+	return details, nil
+}
+
+// queryForeignKeys runs one of GetTableDetails' two (outbound/inbound) FK
+// queries — same column shape either way, just a different WHERE clause and
+// which columns mean "this table" vs. "the referenced table".
+func queryForeignKeys(ctx context.Context, db *sql.DB, query, database, table string) ([]ForeignKeyInfo, error) {
+	rows, err := db.QueryContext(ctx, query, database, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []ForeignKeyInfo{}
+	for rows.Next() {
+		var fk ForeignKeyInfo
+		if err := rows.Scan(&fk.Name, &fk.Column, &fk.ReferencedSchema, &fk.ReferencedTable,
+			&fk.ReferencedColumn, &fk.OnUpdate, &fk.OnDelete); err != nil {
+			continue
+		}
+		out = append(out, fk)
 	}
 	return out, rows.Err()
 }

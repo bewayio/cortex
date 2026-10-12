@@ -3,9 +3,12 @@ import { createPortal } from 'react-dom'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { Plus, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import '@xterm/xterm/css/xterm.css'
 import { StartTerminal, TerminalInput, TerminalResize, CloseTerminal } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { usePlatform } from '../utils/platform'
+import { useWorkspaceStore } from '../stores/workspaceStore'
 
 // Shift+Enter envia LF (Ctrl+J): Claude Code e Codex tratam como nova linha no prompt.
 // Num shell comum equivale a Enter.
@@ -56,6 +59,11 @@ export default function Terminal({
   bottomContainer, rightContainer, bottomHeight, rightWidth, visible,
   workspaceId, workdir, initialCount = 1, onTabCountChange, onAllClosed, onDraggingChange,
 }: Props) {
+  const { t } = useTranslation('terminal')
+  const platform = usePlatform()
+  const platformRef = useRef(platform)
+  useEffect(() => { platformRef.current = platform }, [platform])
+
   const [tabs, setTabs] = useState<TermTab[]>([])
   const [activeBottomId, setActiveBottomId] = useState<string | null>(null)
   const [activeRightId,  setActiveRightId]  = useState<string | null>(null)
@@ -146,6 +154,30 @@ export default function Terminal({
     // O xterm repassa keydown, keypress e keyup ao handler. Retornar false só no keydown
     // deixa o keypress enviar um '\r' extra, e o CLI enviaria a mensagem. Bloqueia todos.
     xterm.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      // Ctrl/Cmd+Up/Down (project switcher — ver App.tsx) nunca chegava ao
+      // listener global de `window`: xterm mapeia esses atalhos pra uma
+      // sequência de escape (navegação de palavra no shell) e, ao emitir
+      // dado, chama `cancel(e, true)` internamente — isso dá preventDefault
+      // E stopPropagation, igual ao bug já visto no Monaco (ver
+      // globalEditorShortcuts.ts). Intercepta aqui, antes do xterm processar,
+      // e repassa pro mesmo action do workspaceStore (2026-10-12).
+      if (e.type === 'keydown' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        const isMac = platformRef.current === 'darwin'
+        const mod = isMac ? e.metaKey : e.ctrlKey
+        if (mod) {
+          // stopPropagation também, não só preventDefault — senão o mesmo
+          // evento ainda borbulhava pro listener de `window` em App.tsx, que
+          // chamava cycleProjectSwitcher DE NOVO, avançando o destaque duas
+          // vezes por tecla. Com poucos projetos abertos (ex: 2), o duplo
+          // passo cancelava com o wraparound e parecia que nada mudava (bug
+          // relatado pelo usuário, 2026-10-12).
+          e.preventDefault()
+          e.stopPropagation()
+          useWorkspaceStore.getState().cycleProjectSwitcher(e.key === 'ArrowDown' ? 1 : -1)
+          return false
+        }
+      }
+
       const isShiftEnter = e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
       if (isShiftEnter) {
         if (e.type === 'keydown') {
@@ -614,7 +646,7 @@ export default function Terminal({
 
         <div className="terminal-tabs-spacer" />
 
-        <button className="terminal-add-btn" onClick={() => addTerminalTab(dock)} title="New Terminal">
+        <button className="terminal-add-btn" onClick={() => addTerminalTab(dock)} title={t('newTerminal')}>
           <Plus size={14} />
         </button>
       </div>
@@ -626,7 +658,7 @@ export default function Terminal({
         {/* Só aparece durante um arrasto: o dock está sendo mostrado como
             "ghost" (vazio) pelo App.tsx como zona de soltura. */}
         {dockTabs.length === 0 && (
-          <div className="terminal-drop-placeholder">Solte aqui para mover o terminal</div>
+          <div className="terminal-drop-placeholder">{t('dropToMove')}</div>
         )}
       </div>
     </div>

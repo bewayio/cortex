@@ -1,0 +1,138 @@
+{
+  "loading": "Loading…",
+  "panel": {
+    "title": "DATABASE",
+    "connections": "CONNECTIONS",
+    "savedQueries": "SAVED QUERIES",
+    "newFolder": "New Folder",
+    "newFolderEllipsis": "New Folder…",
+    "newConnection": "New Connection",
+    "newQuery": "New Query",
+    "openLastUsedQuery": "Open Last Used Query",
+    "edit": "Edit",
+    "rename": "Rename",
+    "reconnect": "Reconnect",
+    "moveToFolder": "Move to folder",
+    "noFolder": "No folder",
+    "deleteFolder": "Delete Folder",
+    "folderNamePlaceholder": "Folder name",
+    "connectedSuccessfully": "Connected successfully",
+    "test": "Test",
+    "noConnectionsYet": "No connections yet. Click + to add one.",
+    "noSavedQueriesYet": "No saved queries yet. Run a query and it saves automatically.",
+    "untitled": "Untitled",
+    "untitledQuery": "Untitled query",
+    "connectionsNoun": "Connections",
+    "queriesNoun": "Queries",
+    "deleteConnectionConfirm": "Delete connection <b>{{name}}</b>?",
+    "deleteQueryConfirm": "Delete saved query <b>{{name}}</b>?",
+    "deleteFolderConfirm": "Delete folder <b>{{name}}</b>? {{noun}} inside stay, just ungrouped.",
+    "form": {
+      "name": "Name",
+      "host": "Host",
+      "port": "Port",
+      "user": "User",
+      "password": "Password",
+      "passwordKeepCurrent": "Password (leave blank to keep current)",
+      "databaseOptional": "Database (optional — locks the tree to it)"
+    }
+  },
+  "querySearch": {
+    "placeholder": "Search saved queries…",
+    "untitledQuery": "Untitled query",
+    "noSavedQueriesYet": "No saved queries yet",
+    "noMatch": "No saved queries match \"{{query}}\""
+  },
+  "queryTab": {
+    "selectConnection": "Select connection…",
+    "selectDatabase": "Select database…",
+    "new": "New",
+    "newQueryTitle": "New query",
+    "saveQueryTitle": "Save query (Cmd/Ctrl+S)",
+    "saved": "Saved",
+    "runTitle": "Run selection, or statement under cursor (Cmd/Ctrl+Enter) — connects automatically if only one connection/database is available",
+    "running": "Running…",
+    "run": "Run",
+    "emptyResultsMessage": "Place the cursor on a statement (or select one/more, separated by ';') and run it — Cmd/Ctrl+Enter.",
+    "errors": {
+      "noConnectionConfigured": "No database connection configured yet. Add one in the Database sidebar.",
+      "selectConnectionFirst": "Select a connection above before running — more than one is configured, so it can't be guessed.",
+      "noDatabasesAvailable": "That connection has no databases to run against.",
+      "selectDatabaseFirst": "Select a database above before running — more than one is available, so it can't be guessed.",
+      "couldNotListDatabases": "Could not connect to list databases: {{message}}"
+    }
+  },
+  "resultsGrid": {
+    "ranCount": "Ran {{count}} statements, showing the last",
+    "rowCount_one": "{{count}} row",
+    "rowCount_other": "{{count}} rows",
+    "truncatedAt": "truncated at {{count}}",
+    "rowsAffected_one": "{{count}} row affected",
+    "rowsAffected_other": "{{count}} rows affected",
+    "downloadCSV": "Download CSV",
+    "copyAsTSV": "Copy as TSV",
+    "copy": "Copy",
+    "copied": "Copied!"
+  },
+  "tableTab": {
+    "data": "Data",
+    "properties": "Properties",
+    "filterPlaceholder": "WHERE column = 'value' …",
+    "running": "Running…",
+    "filter": "Filter",
+    "heavyQueryWarning": "This looks like a heavy query — <code>EXPLAIN</code> estimates ~{{estimate}} rows scanned. Filter anyway?",
+    "filterAnyway": "Filter anyway"
+  },
+  "tableProperties": {
+    "yes": "Yes",
+    "no": "No",
+    "sections": {
+      "constraints": "Constraints",
+      "foreignKeys": "Foreign Keys",
+      "references": "References",
+      "triggers": "Triggers",
+      "indexes": "Index",
+      "partitions": "Partitions",
+      "statistics": "Statistics",
+      "ddl": "DDL"
+    },
+    "columns": {
+      "name": "Name",
+      "type": "Type",
+      "columns": "Columns",
+      "column": "Column",
+      "references": "References",
+      "from": "From",
+      "timing": "Timing",
+      "event": "Event",
+      "statement": "Statement",
+      "unique": "Unique",
+      "method": "Method",
+      "expression": "Expression",
+      "description": "Description",
+      "rows": "Rows",
+      "metric": "Metric",
+      "value": "Value"
+    },
+    "empty": {
+      "constraints": "No constraints for this table.",
+      "foreignKeys": "No foreign keys for this table.",
+      "references": "No inbound references for this table.",
+      "triggers": "No triggers for this table.",
+      "indexes": "No indexes for this table.",
+      "partitions": "No partitions — this table is not partitioned.",
+      "statistics": "No statistics for this table."
+    },
+    "stats": {
+      "engine": "Engine",
+      "rowsEstimate": "Rows (estimate)",
+      "dataLength": "Data length",
+      "indexLength": "Index length",
+      "avgRowLength": "Avg row length",
+      "autoIncrement": "Auto increment",
+      "collation": "Collation",
+      "created": "Created",
+      "updated": "Updated"
+    }
+  }
+}

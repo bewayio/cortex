@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Play, Download, Copy, AlertCircle, Save, Plus } from 'lucide-react'
+import { Play, Save, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { editor as MonacoEditorNS } from 'monaco-editor'
 import { EditorTab } from '../types'
 import { useEditorStore } from '../stores/editorStore'
 import MonacoEditor from './MonacoEditor'
+import QueryResultsGrid from './QueryResultsGrid'
 import { setActiveQueryContext, registerSqlCompletionProvider } from '../utils/sqlAutocomplete'
 import { registerGlobalEditorShortcuts } from '../utils/globalEditorShortcuts'
 import { splitSqlStatements, statementAtOffset } from '../utils/sqlStatements'
@@ -19,29 +21,8 @@ interface Props {
   tab: EditorTab
 }
 
-// CSV (RFC 4180): aspas se o valor tem vírgula, aspas ou quebra de linha;
-// aspas internas viram duas aspas.
-function csvCell(v: unknown): string {
-  if (v === null || v === undefined) return ''
-  const s = String(v)
-  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
-  return s
-}
-
-function toCSV(result: QueryResult): string {
-  const lines = [result.columns.map(csvCell).join(',')]
-  for (const row of result.rows) lines.push(row.map(csvCell).join(','))
-  return lines.join('\r\n')
-}
-
-function toTSV(result: QueryResult): string {
-  const esc = (v: unknown) => (v === null || v === undefined ? '' : String(v).replace(/\t/g, ' ').replace(/\n/g, ' '))
-  const lines = [result.columns.map(esc).join('\t')]
-  for (const row of result.rows) lines.push(row.map(esc).join('\t'))
-  return lines.join('\n')
-}
-
 export default function QueryTab({ tab }: Props) {
+  const { t } = useTranslation('database')
   const { updateTabContent, markTabSaved, openOrFocusTab } = useEditorStore()
 
   const [connections, setConnections] = useState<DBConnection[]>([])
@@ -53,7 +34,6 @@ export default function QueryTab({ tab }: Props) {
   const [ranCount, setRanCount] = useState(1)
   const [splitPct, setSplitPct] = useState(55) // % da altura para o editor
   const [savedQueryId, setSavedQueryId] = useState(tab.savedQueryId)
-  const [copyFeedback, setCopyFeedback] = useState(false)
   const [saveFeedback, setSaveFeedback] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -140,9 +120,9 @@ export default function QueryTab({ tab }: Props) {
         connId = connections[0].id
         setConnectionId(connId)
       } else if (connections.length === 0) {
-        return { error: 'No database connection configured yet. Add one in the Database sidebar.' }
+        return { error: t('queryTab.errors.noConnectionConfigured') }
       } else {
-        return { error: 'Select a connection above before running — more than one is configured, so it can\'t be guessed.' }
+        return { error: t('queryTab.errors.selectConnectionFirst') }
       }
     }
 
@@ -158,12 +138,12 @@ export default function QueryTab({ tab }: Props) {
             db = dbs[0]
             setDatabase(db)
           } else if (dbs.length === 0) {
-            return { error: 'That connection has no databases to run against.' }
+            return { error: t('queryTab.errors.noDatabasesAvailable') }
           } else {
-            return { error: 'Select a database above before running — more than one is available, so it can\'t be guessed.' }
+            return { error: t('queryTab.errors.selectDatabaseFirst') }
           }
         } catch (err) {
-          return { error: `Could not connect to list databases: ${err instanceof Error ? err.message : String(err)}` }
+          return { error: t('queryTab.errors.couldNotListDatabases', { message: err instanceof Error ? err.message : String(err) }) }
         }
       }
     }
@@ -218,28 +198,6 @@ export default function QueryTab({ tab }: Props) {
 
   const runQuery = () => runCurrent()
 
-  const downloadCSV = () => {
-    if (!result) return
-    const blob = new Blob([toCSV(result)], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${(tab.name || 'query').replace(/[^a-z0-9-_]+/gi, '_')}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const copyTSV = async () => {
-    if (!result) return
-    try {
-      await navigator.clipboard.writeText(toTSV(result))
-      setCopyFeedback(true)
-      setTimeout(() => setCopyFeedback(false), 1500)
-    } catch (err) {
-      console.error('Clipboard copy failed:', err)
-    }
-  }
-
   const handleSplitDrag = (e: React.MouseEvent) => {
     e.preventDefault()
     const container = containerRef.current
@@ -278,7 +236,7 @@ export default function QueryTab({ tab }: Props) {
           value={connectionId}
           onChange={e => { setConnectionId(e.target.value); setDatabase('') }}
         >
-          <option value="">Select connection…</option>
+          <option value="">{t('queryTab.selectConnection')}</option>
           {connections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select
@@ -287,20 +245,20 @@ export default function QueryTab({ tab }: Props) {
           onChange={e => setDatabase(e.target.value)}
           disabled={!connectionId || dbLocked}
         >
-          <option value="">Select database…</option>
+          <option value="">{t('queryTab.selectDatabase')}</option>
           {databases.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
 
         <div className="query-subheader-spacer" />
 
-        <button className="query-toolbar-btn" onClick={newQueryTab} title="New query">
-          <Plus size={12} /> New
+        <button className="query-toolbar-btn" onClick={newQueryTab} title={t('queryTab.newQueryTitle')}>
+          <Plus size={12} /> {t('queryTab.new')}
         </button>
-        <button className="query-toolbar-btn" onClick={saveQuery} title="Save query (Cmd/Ctrl+S)">
-          <Save size={12} /> {saveFeedback ? 'Saved!' : tab.isModified || !savedQueryId ? 'Save' : 'Saved'}
+        <button className="query-toolbar-btn" onClick={saveQuery} title={t('queryTab.saveQueryTitle')}>
+          <Save size={12} /> {saveFeedback ? t('queryTab.saved') : tab.isModified || !savedQueryId ? t('common:save') : t('queryTab.saved')}
         </button>
-        <button className="query-run-btn" onClick={runQuery} disabled={running} title="Run selection, or statement under cursor (Cmd/Ctrl+Enter) — connects automatically if only one connection/database is available">
-          <Play size={13} /> {running ? 'Running…' : 'Run'}
+        <button className="query-run-btn" onClick={runQuery} disabled={running} title={t('queryTab.runTitle')}>
+          <Play size={13} /> {running ? t('queryTab.running') : t('queryTab.run')}
         </button>
       </div>
 
@@ -319,51 +277,12 @@ export default function QueryTab({ tab }: Props) {
         <div className="query-split-handle" onMouseDown={handleSplitDrag} />
 
         <div className="query-results-pane">
-          {!result ? (
-            <div className="query-empty">Place the cursor on a statement (or select one/more, separated by ';') and run it — Cmd/Ctrl+Enter.</div>
-          ) : result.error ? (
-            <div className="query-error"><AlertCircle size={13} /> {result.error}</div>
-          ) : (
-            <>
-              <div className="query-results-toolbar">
-                <span className="query-results-meta">
-                  {ranCount > 1 ? `Ran ${ranCount} statements, showing the last · ` : ''}
-                  {result.rows.length > 0
-                    ? `${result.rowCount} row${result.rowCount === 1 ? '' : 's'}${result.truncated ? ` (truncated at ${result.rowCount})` : ''} · ${result.durationMs}ms`
-                    : `${result.rowsAffected} row(s) affected · ${result.durationMs}ms`}
-                </span>
-                <div className="query-subheader-spacer" />
-                {result.rows.length > 0 && (
-                  <>
-                    <button className="query-toolbar-btn" onClick={downloadCSV} title="Download CSV">
-                      <Download size={12} /> CSV
-                    </button>
-                    <button className="query-toolbar-btn" onClick={copyTSV} title="Copy as TSV">
-                      <Copy size={12} /> {copyFeedback ? 'Copied!' : 'Copy'}
-                    </button>
-                  </>
-                )}
-              </div>
-              {result.rows.length > 0 && (
-                <div className="query-results-grid-wrap">
-                  <table className="query-results-grid">
-                    <thead>
-                      <tr>{result.columns.map(c => <th key={c}>{c}</th>)}</tr>
-                    </thead>
-                    <tbody>
-                      {result.rows.map((row, i) => (
-                        <tr key={i}>
-                          {row.map((cell, j) => (
-                            <td key={j}>{cell === null || cell === undefined ? <span className="query-null">NULL</span> : String(cell)}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
+          <QueryResultsGrid
+            result={result}
+            ranCount={ranCount}
+            emptyMessage={t('queryTab.emptyResultsMessage')}
+            downloadFilename={tab.name || 'query'}
+          />
         </div>
       </div>
     </div>

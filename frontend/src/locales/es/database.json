@@ -1,0 +1,138 @@
+{
+  "loading": "Cargando…",
+  "panel": {
+    "title": "BASE DE DATOS",
+    "connections": "CONEXIONES",
+    "savedQueries": "QUERIES GUARDADAS",
+    "newFolder": "Nueva Carpeta",
+    "newFolderEllipsis": "Nueva Carpeta…",
+    "newConnection": "Nueva Conexión",
+    "newQuery": "Nueva Query",
+    "openLastUsedQuery": "Abrir Última Query Usada",
+    "edit": "Editar",
+    "rename": "Renombrar",
+    "reconnect": "Reconectar",
+    "moveToFolder": "Mover a carpeta",
+    "noFolder": "Sin carpeta",
+    "deleteFolder": "Eliminar Carpeta",
+    "folderNamePlaceholder": "nombre de la carpeta",
+    "connectedSuccessfully": "Conectado con éxito",
+    "test": "Probar",
+    "noConnectionsYet": "Aún no hay conexiones. Haz clic en + para agregar una.",
+    "noSavedQueriesYet": "Aún no hay queries guardadas. Ejecuta una query y se guarda automáticamente.",
+    "untitled": "Sin título",
+    "untitledQuery": "Query sin título",
+    "connectionsNoun": "Conexiones",
+    "queriesNoun": "Queries",
+    "deleteConnectionConfirm": "¿Eliminar conexión <b>{{name}}</b>?",
+    "deleteQueryConfirm": "¿Eliminar query guardada <b>{{name}}</b>?",
+    "deleteFolderConfirm": "¿Eliminar carpeta <b>{{name}}</b>? {{noun}} dentro se mantienen, solo quedan sin agrupar.",
+    "form": {
+      "name": "Nombre",
+      "host": "Host",
+      "port": "Puerto",
+      "user": "Usuario",
+      "password": "Contraseña",
+      "passwordKeepCurrent": "Contraseña (deja en blanco para mantener la actual)",
+      "databaseOptional": "Base de datos (opcional — bloquea el árbol en ella)"
+    }
+  },
+  "querySearch": {
+    "placeholder": "Buscar queries guardadas…",
+    "untitledQuery": "Query sin título",
+    "noSavedQueriesYet": "Aún no hay queries guardadas",
+    "noMatch": "Ninguna query guardada coincide con \"{{query}}\""
+  },
+  "queryTab": {
+    "selectConnection": "Seleccionar conexión…",
+    "selectDatabase": "Seleccionar base de datos…",
+    "new": "Nueva",
+    "newQueryTitle": "Nueva query",
+    "saveQueryTitle": "Guardar query (Cmd/Ctrl+S)",
+    "saved": "Guardada",
+    "runTitle": "Ejecuta la selección, o el statement bajo el cursor (Cmd/Ctrl+Enter) — se conecta automáticamente si solo hay una conexión/base disponible",
+    "running": "Ejecutando…",
+    "run": "Ejecutar",
+    "emptyResultsMessage": "Posiciona el cursor en un statement (o selecciona uno o más, separados por ';') y ejecútalo — Cmd/Ctrl+Enter.",
+    "errors": {
+      "noConnectionConfigured": "Aún no hay ninguna conexión de base de datos configurada. Agrega una en la barra lateral de Base de Datos.",
+      "selectConnectionFirst": "Selecciona una conexión arriba antes de ejecutar — hay más de una configurada, no se puede adivinar.",
+      "noDatabasesAvailable": "Esa conexión no tiene bases de datos contra las que ejecutar.",
+      "selectDatabaseFirst": "Selecciona una base de datos arriba antes de ejecutar — hay más de una disponible, no se puede adivinar.",
+      "couldNotListDatabases": "No se pudieron listar las bases de datos: {{message}}"
+    }
+  },
+  "resultsGrid": {
+    "ranCount": "Se ejecutaron {{count}} statements, mostrando el último",
+    "rowCount_one": "{{count}} fila",
+    "rowCount_other": "{{count}} filas",
+    "truncatedAt": "truncado en {{count}}",
+    "rowsAffected_one": "{{count}} fila afectada",
+    "rowsAffected_other": "{{count}} filas afectadas",
+    "downloadCSV": "Descargar CSV",
+    "copyAsTSV": "Copiar como TSV",
+    "copy": "Copiar",
+    "copied": "¡Copiado!"
+  },
+  "tableTab": {
+    "data": "Datos",
+    "properties": "Propiedades",
+    "filterPlaceholder": "WHERE columna = 'valor' …",
+    "running": "Ejecutando…",
+    "filter": "Filtrar",
+    "heavyQueryWarning": "Esta consulta parece pesada — <code>EXPLAIN</code> estima ~{{estimate}} filas escaneadas. ¿Filtrar de todas formas?",
+    "filterAnyway": "Filtrar de todas formas"
+  },
+  "tableProperties": {
+    "yes": "Sí",
+    "no": "No",
+    "sections": {
+      "constraints": "Constraints",
+      "foreignKeys": "Claves Foráneas",
+      "references": "Referencias",
+      "triggers": "Triggers",
+      "indexes": "Índices",
+      "partitions": "Particiones",
+      "statistics": "Estadísticas",
+      "ddl": "DDL"
+    },
+    "columns": {
+      "name": "Nombre",
+      "type": "Tipo",
+      "columns": "Columnas",
+      "column": "Columna",
+      "references": "Referencias",
+      "from": "Desde",
+      "timing": "Momento",
+      "event": "Evento",
+      "statement": "Statement",
+      "unique": "Único",
+      "method": "Método",
+      "expression": "Expresión",
+      "description": "Descripción",
+      "rows": "Filas",
+      "metric": "Métrica",
+      "value": "Valor"
+    },
+    "empty": {
+      "constraints": "Sin constraints en esta tabla.",
+      "foreignKeys": "Sin claves foráneas en esta tabla.",
+      "references": "Sin referencias entrantes en esta tabla.",
+      "triggers": "Sin triggers en esta tabla.",
+      "indexes": "Sin índices en esta tabla.",
+      "partitions": "Sin particiones — esta tabla no está particionada.",
+      "statistics": "Sin estadísticas para esta tabla."
+    },
+    "stats": {
+      "engine": "Motor",
+      "rowsEstimate": "Filas (estimado)",
+      "dataLength": "Tamaño de datos",
+      "indexLength": "Tamaño de índice",
+      "avgRowLength": "Tamaño medio de fila",
+      "autoIncrement": "Auto increment",
+      "collation": "Collation",
+      "created": "Creado",
+      "updated": "Actualizado"
+    }
+  }
+}

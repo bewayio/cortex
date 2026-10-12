@@ -1,0 +1,21 @@
+{
+  "confirmDelete": {
+    "one": "¿Eliminar <b>{{name}}</b>?",
+    "many": "¿Eliminar <b>{{count}} elementos</b>?"
+  },
+  "contextMenu": {
+    "open": "Abrir",
+    "rename": "Renombrar",
+    "copyPath": "Copiar Ruta",
+    "revealInFinder": "Mostrar en el Finder",
+    "deleteCount": "Eliminar {{count}} elementos"
+  },
+  "create": {
+    "folderNamePlaceholder": "nombre de la carpeta",
+    "fileNamePlaceholder": "nombre del archivo"
+  },
+  "fileSearch": {
+    "placeholder": "Buscar archivos…",
+    "noMatch": "Ningún archivo coincide con \"{{query}}\""
+  }
+}

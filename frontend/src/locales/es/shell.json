@@ -1,0 +1,46 @@
+{
+  "settings": {
+    "title": "Configuración",
+    "sections": {
+      "language": "Idioma"
+    }
+  },
+  "language": {
+    "pt-BR": "Português (Brasil)",
+    "es": "Español",
+    "en-US": "English"
+  },
+  "titleBar": {
+    "minimize": "Minimizar",
+    "maximize": "Maximizar",
+    "restore": "Restaurar",
+    "close": "Cerrar"
+  },
+  "activityBar": {
+    "explorer": "Explorador (⌘+Shift+E)",
+    "sourceControl": "Control de Versiones",
+    "database": "Base de Datos",
+    "toggleTerminal": "Alternar Terminal (Ctrl+`)"
+  },
+  "sidebar": {
+    "explorer": "EXPLORADOR",
+    "sourceControl": "CONTROL DE VERSIONES",
+    "newFile": "Nuevo Archivo",
+    "newFolder": "Nueva Carpeta",
+    "collapseAll": "Contraer Todo",
+    "openFolderToStart": "Abra una carpeta para empezar a editar"
+  },
+  "statusBar": {
+    "text": "TEXTO",
+    "modified": "Modificado"
+  },
+  "workspaceList": {
+    "openProjects": "Proyectos Abiertos",
+    "everOpened": "Abiertos Alguna Vez",
+    "openFolder": "Abrir Carpeta…",
+    "everOpenedSublabel": "Proyectos que abriste recientemente — haz clic para reabrir",
+    "removeFromHistory": "Eliminar del historial permanentemente",
+    "closeKeepHistory": "Cerrar (permanece en Abiertos Alguna Vez)",
+    "removeFromHistoryShort": "Eliminar del historial"
+  }
+}

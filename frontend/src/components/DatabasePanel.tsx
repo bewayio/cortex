@@ -3,6 +3,7 @@ import {
   ChevronRight, Database as DatabaseIcon, Table2, Plus, Pencil, Trash2,
   PlugZap, FileText, Folder, FolderPlus, FolderOpen, History, RefreshCw,
 } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 import { useEditorStore } from '../stores/editorStore'
 import { usePlatform } from '../utils/platform'
 import {
@@ -38,7 +39,17 @@ interface NewFolderPrompt { kind: ItemKind }
 // (folders have no separate id — they're just a name other items reference).
 interface Renaming { kind: RowKind; id: string; value: string }
 
-export default function DatabasePanel() {
+export interface DatabasePanelHandle {
+  newConnection: () => void
+  newConnectionFolder: () => void
+}
+
+interface Props {
+  actionRef?: React.MutableRefObject<DatabasePanelHandle | null>
+}
+
+export default function DatabasePanel({ actionRef }: Props) {
+  const { t } = useTranslation('database')
   const { openOrFocusTab } = useEditorStore()
 
   const [connectionsCollapsed, setConnectionsCollapsed] = useState(false)
@@ -54,9 +65,12 @@ export default function DatabasePanel() {
   const [expandedFolder, setExpandedFolder] = useState<Set<string>>(new Set()) // key: "connection:Name" | "query:Name"
   const [databasesByConn, setDatabasesByConn] = useState<Record<string, string[]>>({})
   const [tablesByDb, setTablesByDb] = useState<Record<string, string[]>>({})
-  // Erro ao listar tabelas de UMA database (key igual a tablesByDb) — antes
-  // era engolido (`.catch(() => [])`), indistinguível de uma database vazia.
+  // Erro ao listar tabelas de UMA database (key igual a tablesByDb) — não
+  // engolido por `.catch(() => [])`, indistinguível de uma database vazia.
   const [dbError, setDbError] = useState<Record<string, string>>({})
+  // Foco de UMA tabela (dentro da árvore expandida) — igual em espírito a
+  // focusedNode, mas separado porque tabela nunca é alvo de Ctrl+Enter hoje.
+  const [focusedTable, setFocusedTable] = useState<string | null>(null) // key: connId/db/table
 
   const [form, setForm] = useState<FormState | null>(null)
   const [testMsg, setTestMsg] = useState<{ id: string; ok: boolean; msg: string } | null>(null)
@@ -180,9 +194,10 @@ export default function DatabasePanel() {
   }
 
   // Busca as databases de UMA conexão (e, se travada numa única database,
-  // as tabelas dela também). Falha NÃO grava `databasesByConn[conn.id]` —
-  // mesma lógica de "não cachear vazio-por-erro" do fetchDbTables, senão o
-  // guard `!databasesByConn[conn.id]` nunca mais deixaria reconsultar.
+  // as tabelas dela também — ela própria representa esse nível, ver
+  // renderConnectionRow). Falha NÃO grava `databasesByConn[conn.id]` — deixa
+  // a chave ausente pra uma próxima tentativa de expandir poder reconsultar
+  // de verdade, em vez de cachear um resultado vazio-por-erro.
   const fetchConnDatabases = async (conn: DBConnection) => {
     try {
       const dbs = await ListDatabases(conn.id)
@@ -221,7 +236,7 @@ export default function DatabasePanel() {
     setExpandedDb(next)
   }
 
-  // Força reconectar: limpa databases/tables/erros cacheados desta conexão
+  // Força reconectar: limpa databases/tabelas/erros cacheados desta conexão
   // e reconsulta do zero, expandindo a linha caso estivesse colapsada.
   const reconnectConnection = async (conn: DBConnection) => {
     setDatabasesByConn(prev => { const n = { ...prev }; delete n[conn.id]; return n })
@@ -257,6 +272,26 @@ export default function DatabasePanel() {
       name: table ? table : 'New Query',
       ext: 'sql', content: sql, originalContent: sql,
       isModified: false, isCommitTab: false, isQueryTab: true,
+      dbConnectionId: connId, dbDatabase: database,
+    } as any)
+  }
+
+  const openTableTab = (connId: string, database: string, table: string) => {
+    openOrFocusTab({
+      path: `__table_${connId}_${database}_${table}__`,
+      name: table,
+      ext: '', content: '', originalContent: '',
+      isModified: false, isCommitTab: false, isTableTab: true,
+      dbConnectionId: connId, dbDatabase: database, dbTable: table,
+    } as any)
+  }
+
+  const openDbTablesTab = (connId: string, database: string) => {
+    openOrFocusTab({
+      path: `__db_tables_${connId}_${database}__`,
+      name: database,
+      ext: '', content: '', originalContent: '',
+      isModified: false, isCommitTab: false, isDbTablesTab: true,
       dbConnectionId: connId, dbDatabase: database,
     } as any)
   }
@@ -350,7 +385,7 @@ export default function DatabasePanel() {
           user: form.user, password: form.password, database: form.database, folder: form.folder,
         } as any)
         await TestDBConnection(id)
-        setTestMsg({ id, ok: true, msg: 'Connected successfully' })
+        setTestMsg({ id, ok: true, msg: t('panel.connectedSuccessfully') })
         setForm({ ...form, id })
         loadConnections()
       } catch (err) {
@@ -360,7 +395,7 @@ export default function DatabasePanel() {
     }
     try {
       await TestDBConnection(form.id)
-      setTestMsg({ id: form.id, ok: true, msg: 'Connected successfully' })
+      setTestMsg({ id: form.id, ok: true, msg: t('panel.connectedSuccessfully') })
     } catch (err) {
       setTestMsg({ id: form.id, ok: false, msg: err instanceof Error ? err.message : String(err) })
     }
@@ -382,6 +417,17 @@ export default function DatabasePanel() {
 
   // ── Pastas ──────────────────────────────────────────────────────────────
   const openNewFolderPrompt = (kind: ItemKind) => { setNewFolderPrompt({ kind }); setNewFolderName('') }
+
+  // Expõe ações ao pai via actionRef — mesmo padrão de FileExplorerHandle,
+  // pro atalho global Ctrl/Cmd+N / Ctrl/Cmd+Shift+N (App.tsx) poder acionar
+  // "Nova Conexão"/"Nova Pasta" quando o painel de Database está ativo.
+  useEffect(() => {
+    if (!actionRef) return
+    actionRef.current = {
+      newConnection: startCreate,
+      newConnectionFolder: () => openNewFolderPrompt('connection'),
+    }
+  })
   const createFolder = async () => {
     if (!newFolderPrompt || !newFolderName.trim()) { setNewFolderPrompt(null); return }
     if (newFolderPrompt.kind === 'connection') {
@@ -443,6 +489,7 @@ export default function DatabasePanel() {
         draggable={!(renaming?.kind === 'connection' && renaming.id === conn.id)}
         onDragStart={handleDragStart('connection', conn.id)}
         onClick={() => { setFocusedNode({ kind: 'connection', connectionId: conn.id }); setFocusedRow({ kind: 'connection', id: conn.id }); toggleConn(conn) }}
+        onDoubleClick={() => { if (conn.database) openDbTablesTab(conn.id, conn.database) }}
         onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'connection', id: conn.id, currentFolder: conn.folder || '' }) }}
       >
         <span className={`file-tree-item-chevron ${expandedConn.has(conn.id) ? 'expanded' : ''}`}>
@@ -466,16 +513,16 @@ export default function DatabasePanel() {
         ) : (
           <span className="file-tree-item-name">{conn.name}</span>
         )}
-        <button className="db-row-btn" title="New Query" onClick={e => { e.stopPropagation(); openQueryTab(conn.id, conn.database || '') }}>
+        <button className="db-row-btn" title={t('panel.newQuery')} onClick={e => { e.stopPropagation(); openQueryTab(conn.id, conn.database || '') }}>
           <FileText size={12} />
         </button>
-        <button className="db-row-btn" title="Open Last Used Query" onClick={e => { e.stopPropagation(); openLatestOrNewQuery({ kind: 'connection', connectionId: conn.id }) }}>
+        <button className="db-row-btn" title={t('panel.openLastUsedQuery')} onClick={e => { e.stopPropagation(); openLatestOrNewQuery({ kind: 'connection', connectionId: conn.id }) }}>
           <History size={12} />
         </button>
-        <button className="db-row-btn" title="Edit" onClick={e => { e.stopPropagation(); startEdit(conn) }}>
+        <button className="db-row-btn" title={t('panel.edit')} onClick={e => { e.stopPropagation(); startEdit(conn) }}>
           <Pencil size={12} />
         </button>
-        <button className="db-row-btn" title="Delete" onClick={e => { e.stopPropagation(); setConfirmDeleteId(conn.id) }}>
+        <button className="db-row-btn" title={t('common:delete')} onClick={e => { e.stopPropagation(); setConfirmDeleteId(conn.id) }}>
           <Trash2 size={12} />
         </button>
       </div>
@@ -483,10 +530,10 @@ export default function DatabasePanel() {
       {confirmDeleteId === conn.id && (
         <div className="ft-confirm-overlay">
           <div className="ft-confirm-dialog">
-            <div className="ft-confirm-msg">Delete connection <strong>{conn.name}</strong>?</div>
+            <div className="ft-confirm-msg"><Trans t={t} i18nKey="panel.deleteConnectionConfirm" values={{ name: conn.name }} components={{ b: <strong /> }} /></div>
             <div className="ft-confirm-actions">
-              <button className="ft-confirm-btn cancel" onClick={() => setConfirmDeleteId(null)}>Cancel</button>
-              <button className="ft-confirm-btn danger" onClick={() => executeDelete(conn.id)}>Delete</button>
+              <button className="ft-confirm-btn cancel" onClick={() => setConfirmDeleteId(null)}>{t('common:cancel')}</button>
+              <button className="ft-confirm-btn danger" onClick={() => executeDelete(conn.id)}>{t('common:delete')}</button>
             </div>
           </div>
         </div>
@@ -499,6 +546,21 @@ export default function DatabasePanel() {
       {expandedConn.has(conn.id) && (databasesByConn[conn.id] || []).map(dbName => {
         const skipDbLevel = !!conn.database
         const key = `${conn.id}/${dbName}`
+        const tableRow = (table: string, pad: number) => {
+          const tKey = `${key}/${table}`
+          return (
+            <div
+              key={table}
+              className={`file-tree-item ${focusedTable === tKey ? 'focused' : ''}`}
+              style={{ paddingLeft: pad }}
+              onClick={() => setFocusedTable(tKey)}
+              onDoubleClick={() => openTableTab(conn.id, dbName, table)}
+            >
+              <span className="file-tree-item-icon"><Table2 size={13} style={{ color: '#98c379' }} /></span>
+              <span className="file-tree-item-name">{table}</span>
+            </div>
+          )
+        }
         if (skipDbLevel) {
           if (dbError[key]) {
             return (
@@ -507,14 +569,7 @@ export default function DatabasePanel() {
               </div>
             )
           }
-          return (tablesByDb[key] || []).map(table => (
-            <div key={table} className="file-tree-item"
-              style={{ paddingLeft: indent + 16 }}
-              onClick={() => openQueryTab(conn.id, dbName, table)}>
-              <span className="file-tree-item-icon"><Table2 size={13} style={{ color: '#98c379' }} /></span>
-              <span className="file-tree-item-name">{table}</span>
-            </div>
-          ))
+          return (tablesByDb[key] || []).map(table => tableRow(table, indent + 16))
         }
         return (
           <div key={dbName}>
@@ -522,30 +577,24 @@ export default function DatabasePanel() {
               className={`file-tree-item ${focusedNode?.kind === 'database' && focusedNode.connectionId === conn.id && focusedNode.database === dbName ? 'focused' : ''}`}
               style={{ paddingLeft: indent + 16 }}
               onClick={() => { setFocusedNode({ kind: 'database', connectionId: conn.id, database: dbName }); toggleDb(conn.id, dbName) }}
+              onDoubleClick={() => openDbTablesTab(conn.id, dbName)}
             >
               <span className={`file-tree-item-chevron ${expandedDb.has(key) ? 'expanded' : ''}`}>
                 <ChevronRight size={12} />
               </span>
               <span className="file-tree-item-icon"><DatabaseIcon size={13} style={{ color: '#e5c07b' }} /></span>
               <span className="file-tree-item-name">{dbName}</span>
-              <button className="db-row-btn" title="New Query" onClick={e => { e.stopPropagation(); openQueryTab(conn.id, dbName) }}>
+              <button className="db-row-btn" title={t('panel.newQuery')} onClick={e => { e.stopPropagation(); openQueryTab(conn.id, dbName) }}>
                 <FileText size={12} />
               </button>
-              <button className="db-row-btn" title="Open Last Used Query" onClick={e => { e.stopPropagation(); openLatestOrNewQuery({ kind: 'database', connectionId: conn.id, database: dbName }) }}>
+              <button className="db-row-btn" title={t('panel.openLastUsedQuery')} onClick={e => { e.stopPropagation(); openLatestOrNewQuery({ kind: 'database', connectionId: conn.id, database: dbName }) }}>
                 <History size={12} />
               </button>
             </div>
             {expandedDb.has(key) && dbError[key] && (
               <div className="db-test-msg err" style={{ marginLeft: indent + 36 }}>{dbError[key]}</div>
             )}
-            {expandedDb.has(key) && !dbError[key] && (tablesByDb[key] || []).map(table => (
-              <div key={table} className="file-tree-item"
-                style={{ paddingLeft: indent + 32 }}
-                onClick={() => openQueryTab(conn.id, dbName, table)}>
-                <span className="file-tree-item-icon"><Table2 size={13} style={{ color: '#98c379' }} /></span>
-                <span className="file-tree-item-name">{table}</span>
-              </div>
-            ))}
+            {expandedDb.has(key) && !dbError[key] && (tablesByDb[key] || []).map(table => tableRow(table, indent + 32))}
           </div>
         )
       })}
@@ -577,18 +626,18 @@ export default function DatabasePanel() {
           onClick={e => e.stopPropagation()}
         />
       ) : (
-        <span className="file-tree-item-name">{sq.name || 'Untitled query'}</span>
+        <span className="file-tree-item-name">{sq.name || t('panel.untitledQuery')}</span>
       )}
-      <button className="db-row-btn" title="Delete" onClick={e => { e.stopPropagation(); setConfirmDeleteId(sq.id) }}>
+      <button className="db-row-btn" title={t('common:delete')} onClick={e => { e.stopPropagation(); setConfirmDeleteId(sq.id) }}>
         <Trash2 size={12} />
       </button>
       {confirmDeleteId === sq.id && (
         <div className="ft-confirm-overlay" onClick={e => e.stopPropagation()}>
           <div className="ft-confirm-dialog">
-            <div className="ft-confirm-msg">Delete saved query <strong>{sq.name || 'Untitled'}</strong>?</div>
+            <div className="ft-confirm-msg"><Trans t={t} i18nKey="panel.deleteQueryConfirm" values={{ name: sq.name || t('panel.untitled') }} components={{ b: <strong /> }} /></div>
             <div className="ft-confirm-actions">
-              <button className="ft-confirm-btn cancel" onClick={() => setConfirmDeleteId(null)}>Cancel</button>
-              <button className="ft-confirm-btn danger" onClick={() => deleteSavedQuery(sq.id)}>Delete</button>
+              <button className="ft-confirm-btn cancel" onClick={() => setConfirmDeleteId(null)}>{t('common:cancel')}</button>
+              <button className="ft-confirm-btn danger" onClick={() => deleteSavedQuery(sq.id)}>{t('common:delete')}</button>
             </div>
           </div>
         </div>
@@ -601,7 +650,7 @@ export default function DatabasePanel() {
   const renderFolderRow = (kind: ItemKind, folderName: string, count: number) => {
     const rowKind: RowKind = kind === 'connection' ? 'connection-folder' : 'query-folder'
     const key = `${kind}:${folderName}`
-    const noun = kind === 'connection' ? 'Connections' : 'Queries'
+    const noun = kind === 'connection' ? t('panel.connectionsNoun') : t('panel.queriesNoun')
     return (
       <div key={folderName}>
         <div
@@ -637,17 +686,17 @@ export default function DatabasePanel() {
             <span className="file-tree-item-name">{folderName}</span>
           )}
           <span className="db-folder-count">{count}</span>
-          <button className="db-row-btn" title="Delete Folder" onClick={e => { e.stopPropagation(); setConfirmDeleteFolder({ kind, name: folderName }) }}>
+          <button className="db-row-btn" title={t('panel.deleteFolder')} onClick={e => { e.stopPropagation(); setConfirmDeleteFolder({ kind, name: folderName }) }}>
             <Trash2 size={12} />
           </button>
         </div>
         {confirmDeleteFolder?.kind === kind && confirmDeleteFolder.name === folderName && (
           <div className="ft-confirm-overlay">
             <div className="ft-confirm-dialog">
-              <div className="ft-confirm-msg">Delete folder <strong>{folderName}</strong>? {noun} inside stay, just ungrouped.</div>
+              <div className="ft-confirm-msg"><Trans t={t} i18nKey="panel.deleteFolderConfirm" values={{ name: folderName, noun }} components={{ b: <strong /> }} /></div>
               <div className="ft-confirm-actions">
-                <button className="ft-confirm-btn cancel" onClick={() => setConfirmDeleteFolder(null)}>Cancel</button>
-                <button className="ft-confirm-btn danger" onClick={() => deleteFolder(kind, folderName)}>Delete</button>
+                <button className="ft-confirm-btn cancel" onClick={() => setConfirmDeleteFolder(null)}>{t('common:cancel')}</button>
+                <button className="ft-confirm-btn danger" onClick={() => deleteFolder(kind, folderName)}>{t('common:delete')}</button>
               </div>
             </div>
           </div>
@@ -659,7 +708,7 @@ export default function DatabasePanel() {
   return (
     <div className="database-panel">
       <div className="sidebar-panel-header">
-        <span>DATABASE</span>
+        <span>{t('panel.title')}</span>
       </div>
 
       <div className="sidebar-panel-content">
@@ -675,11 +724,11 @@ export default function DatabasePanel() {
             <span className={`git-section-chevron ${connectionsCollapsed ? 'collapsed' : ''}`} style={{ transform: connectionsCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>
               <ChevronRight size={12} />
             </span>
-            <span style={{ flex: 1 }}>CONNECTIONS</span>
-            <button className="db-row-btn db-section-btn" title="New Folder" onClick={e => { e.stopPropagation(); openNewFolderPrompt('connection') }}>
+            <span style={{ flex: 1 }}>{t('panel.connections')}</span>
+            <button className="db-row-btn db-section-btn" title={t('panel.newFolder')} onClick={e => { e.stopPropagation(); openNewFolderPrompt('connection') }}>
               <FolderPlus size={13} />
             </button>
-            <button className="db-row-btn db-section-btn" title="New Connection" onClick={e => { e.stopPropagation(); startCreate() }}>
+            <button className="db-row-btn db-section-btn" title={t('panel.newConnection')} onClick={e => { e.stopPropagation(); startCreate() }}>
               <Plus size={13} />
             </button>
           </div>
@@ -689,7 +738,7 @@ export default function DatabasePanel() {
               {newFolderPrompt?.kind === 'connection' && (
                 <div className="db-new-folder-row">
                   <input
-                    className="cc-settings-input" autoFocus placeholder="Folder name"
+                    className="cc-settings-input" autoFocus placeholder={t('panel.folderNamePlaceholder')}
                     value={newFolderName} onChange={e => setNewFolderName(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') createFolder(); if (e.key === 'Escape') setNewFolderPrompt(null) }}
                     onBlur={createFolder}
@@ -700,31 +749,31 @@ export default function DatabasePanel() {
               {form && (
                 <div className="cc-settings db-conn-form">
                   <div className="cc-settings-row">
-                    <input className="cc-settings-input" placeholder="Name" value={form.name}
+                    <input className="cc-settings-input" placeholder={t('panel.form.name')} value={form.name}
                       onChange={e => setForm({ ...form, name: e.target.value })} autoFocus />
                   </div>
                   <div className="cc-settings-row">
-                    <input className="cc-settings-input" placeholder="Host" value={form.host}
+                    <input className="cc-settings-input" placeholder={t('panel.form.host')} value={form.host}
                       onChange={e => setForm({ ...form, host: e.target.value })} style={{ flex: 2 }} />
-                    <input className="cc-settings-input" placeholder="Port" value={form.port}
+                    <input className="cc-settings-input" placeholder={t('panel.form.port')} value={form.port}
                       onChange={e => setForm({ ...form, port: e.target.value })} style={{ flex: 1 }} />
                   </div>
                   <div className="cc-settings-row">
-                    <input className="cc-settings-input" placeholder="User" value={form.user}
+                    <input className="cc-settings-input" placeholder={t('panel.form.user')} value={form.user}
                       onChange={e => setForm({ ...form, user: e.target.value })} />
                   </div>
                   <div className="cc-settings-row">
                     <input className="cc-settings-input" type="password"
-                      placeholder={form.id ? 'Password (leave blank to keep current)' : 'Password'}
+                      placeholder={form.id ? t('panel.form.passwordKeepCurrent') : t('panel.form.password')}
                       value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
                   </div>
                   <div className="cc-settings-row">
-                    <input className="cc-settings-input" placeholder="Database (optional — locks the tree to it)"
+                    <input className="cc-settings-input" placeholder={t('panel.form.databaseOptional')}
                       value={form.database} onChange={e => setForm({ ...form, database: e.target.value })} />
                   </div>
                   <div className="cc-settings-row">
                     <select className="query-select db-form-select" value={form.folder} onChange={e => setForm({ ...form, folder: e.target.value })}>
-                      <option value="">No folder</option>
+                      <option value="">{t('panel.noFolder')}</option>
                       {connectionFolders.map(f => <option key={f} value={f}>{f}</option>)}
                     </select>
                   </div>
@@ -732,16 +781,16 @@ export default function DatabasePanel() {
                     <div className={`db-test-msg ${testMsg.ok ? 'ok' : 'err'}`}>{testMsg.msg}</div>
                   )}
                   <div className="cc-settings-actions">
-                    <button className="cc-settings-save" onClick={saveForm}>Save</button>
-                    <button className="cc-settings-cancel" onClick={testForm}><PlugZap size={11} /> Test</button>
-                    <button className="cc-settings-cancel" onClick={() => setForm(null)}>Cancel</button>
+                    <button className="cc-settings-save" onClick={saveForm}>{t('common:save')}</button>
+                    <button className="cc-settings-cancel" onClick={testForm}><PlugZap size={11} /> {t('panel.test')}</button>
+                    <button className="cc-settings-cancel" onClick={() => setForm(null)}>{t('common:cancel')}</button>
                   </div>
                 </div>
               )}
 
               {connections.length === 0 && !form && (
                 <div className="no-workspace-text" style={{ padding: 16 }}>
-                  No connections yet. Click + to add one.
+                  {t('panel.noConnectionsYet')}
                 </div>
               )}
 
@@ -775,8 +824,8 @@ export default function DatabasePanel() {
             <span className={`git-section-chevron ${queriesCollapsed ? 'collapsed' : ''}`} style={{ transform: queriesCollapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>
               <ChevronRight size={12} />
             </span>
-            <span style={{ flex: 1 }}>SAVED QUERIES</span>
-            <button className="db-row-btn db-section-btn" title="New Folder" onClick={e => { e.stopPropagation(); openNewFolderPrompt('query') }}>
+            <span style={{ flex: 1 }}>{t('panel.savedQueries')}</span>
+            <button className="db-row-btn db-section-btn" title={t('panel.newFolder')} onClick={e => { e.stopPropagation(); openNewFolderPrompt('query') }}>
               <FolderPlus size={13} />
             </button>
           </div>
@@ -786,7 +835,7 @@ export default function DatabasePanel() {
               {newFolderPrompt?.kind === 'query' && (
                 <div className="db-new-folder-row">
                   <input
-                    className="cc-settings-input" autoFocus placeholder="Folder name"
+                    className="cc-settings-input" autoFocus placeholder={t('panel.folderNamePlaceholder')}
                     value={newFolderName} onChange={e => setNewFolderName(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') createFolder(); if (e.key === 'Escape') setNewFolderPrompt(null) }}
                     onBlur={createFolder}
@@ -796,7 +845,7 @@ export default function DatabasePanel() {
 
               {savedQueries.length === 0 && (
                 <div className="no-workspace-text" style={{ padding: 16 }}>
-                  No saved queries yet. Run a query and it saves automatically.
+                  {t('panel.noSavedQueriesYet')}
                 </div>
               )}
 
@@ -828,7 +877,7 @@ export default function DatabasePanel() {
               setCtxMenu(null)
               startRename(ctxMenu.kind, ctxMenu.id, current || '')
             }}>
-              <Pencil size={13} /> Rename
+              <Pencil size={13} /> {t('panel.rename')}
             </div>
             {ctxMenu.kind === 'connection' && (
               <div className="context-menu-item" onClick={() => {
@@ -836,14 +885,14 @@ export default function DatabasePanel() {
                 setCtxMenu(null)
                 if (conn) reconnectConnection(conn)
               }}>
-                <RefreshCw size={13} /> Reconnect
+                <RefreshCw size={13} /> {t('panel.reconnect')}
               </div>
             )}
             <div className="context-menu-separator" />
-            <div className="context-menu-label">Move to folder</div>
+            <div className="context-menu-label">{t('panel.moveToFolder')}</div>
             {ctxMenu.currentFolder && (
               <div className="context-menu-item" onClick={() => moveToFolder(ctxMenu.kind, ctxMenu.id, '')}>
-                <Folder size={13} /> No folder
+                <Folder size={13} /> {t('panel.noFolder')}
               </div>
             )}
             {allFoldersFor(ctxMenu.kind).filter(f => f !== ctxMenu.currentFolder).map(f => (
@@ -853,7 +902,7 @@ export default function DatabasePanel() {
             ))}
             <div className="context-menu-separator" />
             <div className="context-menu-item" onClick={() => { setCtxMenu(null); openNewFolderPrompt(ctxMenu.kind) }}>
-              <FolderPlus size={13} /> New Folder…
+              <FolderPlus size={13} /> {t('panel.newFolderEllipsis')}
             </div>
           </div>
         </>
@@ -869,14 +918,14 @@ export default function DatabasePanel() {
               setFolderCtxMenu(null)
               startRename(rowKind, name, name)
             }}>
-              <Pencil size={13} /> Rename
+              <Pencil size={13} /> {t('panel.rename')}
             </div>
             <div className="context-menu-separator" />
             <div className="context-menu-item danger" onClick={() => {
               setConfirmDeleteFolder({ kind: folderCtxMenu.kind, name: folderCtxMenu.name })
               setFolderCtxMenu(null)
             }}>
-              <Trash2 size={13} /> Delete Folder
+              <Trash2 size={13} /> {t('panel.deleteFolder')}
             </div>
           </div>
         </>

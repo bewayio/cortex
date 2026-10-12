@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/anthropics/anthropic-sdk-go v0.2.0-alpha.13
 	github.com/creack/pty v1.1.21
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/wailsapp/wails/v2 v2.12.0
 )

@@ -57,6 +57,18 @@
 .app-titlebar-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--fg); }
 .app-titlebar-close:hover { background: #e81123; color: #fff; }
 
+/* Botão de menu (abre o modal de Configurações) — sempre à esquerda, mesmo
+   lugar em todo sistema. `margin-right: auto` o desgruda do grupo de botões
+   de janela (que fica à direita via justify-content: flex-end no pai),
+   funcionando com ou sem esse grupo presente (ele só existe em
+   Linux/Windows). Largura menor que os outros botões (não tem o mesmo peso
+   visual que minimizar/maximizar/fechar). */
+.app-titlebar-menu {
+  width: 32px;
+  cursor: pointer;
+  margin-right: auto;
+}
+
 .app-main {
   display: flex;
   flex: 1;
@@ -278,6 +290,157 @@
 }
 .ft-confirm-btn.danger:hover { background: #e74c3c; }
 
+/* Modal genérico, centralizado na tela (distinto do ft-confirm-* acima, que
+   é uma barra sticky inline no topo de um painel) — usado pelo aviso de
+   sobrescrita de mudança externa no save (EditorPane.tsx) e reutilizável
+   por outros modais de confirmação futuros. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-dialog {
+  background: #252526;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.65);
+}
+.modal-dialog-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-active);
+  margin-bottom: 8px;
+}
+.modal-dialog-msg {
+  font-size: 12px;
+  color: var(--fg);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.modal-dialog-msg strong { color: var(--fg-active); }
+.modal-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.modal-dialog-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.modal-dialog-btn.cancel {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1px solid var(--divider);
+}
+.modal-dialog-btn.cancel:hover { background: rgba(255,255,255,0.06); }
+.modal-dialog-btn.danger {
+  background: #c0392b;
+  color: #fff;
+  border: 1px solid #c0392b;
+}
+.modal-dialog-btn.danger:hover { background: #e74c3c; }
+
+/* Variante larga do modal genérico acima — usada pelo SettingsModal.tsx
+   (lista de seções à esquerda, conteúdo ao centro, estilo VS Code settings),
+   2026-10-12. */
+.modal-dialog-wide {
+  width: 640px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.settings-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.settings-modal-header .modal-dialog-title { margin-bottom: 0; }
+.settings-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+}
+.settings-modal-close:hover { background: rgba(255,255,255,0.08); color: var(--fg); }
+.settings-modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 320px;
+  overflow: hidden;
+}
+.settings-modal-nav {
+  width: 180px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--divider);
+  padding: 8px;
+  overflow-y: auto;
+}
+.settings-modal-nav-item {
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+.settings-modal-nav-item:hover { background: rgba(255,255,255,0.05); color: var(--fg); }
+.settings-modal-nav-item.active { background: var(--accent); color: #fff; }
+.settings-modal-content {
+  flex: 1;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+.settings-modal-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-active);
+  margin-bottom: 12px;
+}
+.settings-modal-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg);
+}
+.settings-modal-option:hover { background: rgba(255,255,255,0.05); }
+.settings-modal-option.selected { background: rgba(0,122,204,0.15); }
+.settings-modal-option-radio {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--fg-dim);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-modal-option.selected .settings-modal-option-radio { border-color: var(--accent); }
+.settings-modal-option.selected .settings-modal-option-radio::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 /* Input inline para criar/renomear */
 .file-tree-create-row {
   display: flex;
@@ -413,6 +576,15 @@
 
 .workspace-remove-btn:hover { color: #e06c75; background: rgba(224,108,117,0.12); }
 
+.workspace-item.dragging { opacity: 0.5; }
+
+.workspace-drop-indicator {
+  height: 2px;
+  margin: 0 8px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
 /* ─── File Explorer ───────────────────────────────────────────────────────── */
 .file-tree {
   padding: 4px 0;
@@ -508,6 +680,15 @@
 
 .tab-bar-tabs::-webkit-scrollbar {
   display: none;
+}
+
+/* Abas globais (Home) — fixas, não rolam, sempre visíveis à esquerda */
+.tab-bar-pinned {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  border-right: 1px solid var(--divider);
+  -webkit-app-region: no-drag;
 }
 
 .tab {
@@ -679,6 +860,13 @@
 .tab-modified {
   color: var(--accent);
   font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.tab-externally-changed {
+  color: #e5c07b;
+  font-size: 12px;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -2497,4 +2685,200 @@ mark.search-highlight {
 .query-results-grid tr:hover td { background: rgba(255,255,255,0.04); }
 
 .query-null { color: var(--fg-dim); font-style: italic; }
+
+/* ─── Table tab (Data + Properties) ──────────────────────────────────────── */
+.table-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+}
+
+.table-tab-subheader {
+  display: flex;
+  gap: 2px;
+  padding: 6px 10px 0;
+  background: var(--tab-bar-bg);
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+
+.table-subtab-btn {
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--fg-dim);
+  padding: 6px 14px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.1s, border-color 0.1s;
+}
+.table-subtab-btn:hover { color: var(--fg); }
+.table-subtab-btn.active { color: var(--fg-active); border-bottom-color: var(--accent); }
+
+.table-data-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.table-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+
+.table-filter-icon { color: var(--fg-dim); flex-shrink: 0; }
+
+.table-filter-input {
+  flex: 1;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  background: #2d2d2d;
+  color: var(--fg);
+  border: 1px solid #4a4a4a;
+  border-radius: 5px;
+  padding: 6px 10px;
+}
+.table-filter-input:focus { outline: none; border-color: var(--accent); }
+
+.table-filter-btn {
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  padding: 6px 14px;
+  transition: opacity 0.1s;
+}
+.table-filter-btn:disabled { opacity: 0.4; }
+.table-filter-btn:not(:disabled):hover { opacity: 0.85; }
+
+.table-data-results {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.table-properties-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--fg-dim);
+  font-size: 12px;
+}
+
+.table-properties-subheader {
+  padding: 6px 10px 0;
+}
+
+.table-properties-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.table-properties-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--fg-dim);
+  font-size: 12px;
+}
+
+.table-properties-ddl {
+  height: 100%;
+  min-height: 300px;
+}
+
+.db-tables-tab {
+  padding: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+.db-tables-tab-header {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  border-bottom: 1px solid var(--divider);
+}
+
+.db-tables-list { padding: 4px 0; }
+
+.db-tables-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--fg);
+  cursor: default;
+}
+.db-tables-list-item:hover { background: rgba(255,255,255,0.05); }
+.db-tables-list-item.focused { background: rgba(255,255,255,0.08); }
+
+/* ─── Project switcher (Ctrl/Cmd+↑/↓) ────────────────────────────────────── */
+/* App-switcher-style overlay (macOS Cmd+Tab / Ubuntu Alt+Tab in spirit) —
+   centered on screen, not top-anchored like File Search/Command Palette. */
+.project-switcher-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-switcher-card {
+  background: #252526;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  width: 420px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 8px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.65);
+}
+
+.project-switcher-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.project-switcher-row.highlighted {
+  background: var(--accent);
+}
+.project-switcher-row.highlighted .project-switcher-row-name,
+.project-switcher-row.highlighted .project-switcher-row-path {
+  color: #fff;
+}
+
+.project-switcher-row-name {
+  font-size: 13px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-switcher-row-path {
+  font-size: 11px;
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 

@@ -23,7 +23,8 @@ Definidos em `frontend/src/styles/theme.css`. Fundo `#1e1e1e`, sidebar `#252526`
 
 ## Aba de uso / Home (editor, não sidebar)
 
-- Primeiro botão da `ActivityBar`, ícone `Home` (era `BarChart2`, terceiro, até o rename/reorder de 2026-09-26). Não abre painel de sidebar — abre/foca uma aba no editor (`components/UsageTab.tsx`), estilo página de boas-vindas do VS Code. Mesmo padrão de aba única já usado pelo Git Graph (`isGraphTab`), agora com `isUsageTab` em `EditorTab`. Identificadores internos (`isUsageTab`, nome do arquivo) mantidos como estão — só o rótulo/ícone visível mudou.
+- Abre/foca uma aba no editor (`components/UsageTab.tsx`), estilo página de boas-vindas do VS Code. Mesmo padrão de aba única já usado pelo Git Graph (`isGraphTab`), agora com `isUsageTab` em `EditorTab`. Identificadores internos (`isUsageTab`, nome do arquivo) mantidos como estão — só o rótulo/ícone visível mudou.
+- **Sem ícone próprio na `ActivityBar`** desde 2026-10-12 (pedido do usuário): a aba Home já vive sempre fixa em `globalTabs` (ver `editorStore.ts`'s "pin any tab"/pinned-tabs.md), sempre visível na `.tab-bar-pinned` à esquerda da barra de abas — um ícone redundante na `ActivityBar` não tinha mais utilidade depois disso. `ActivityBar.tsx` voltou a só ter Explorer/Git/Database/Terminal.
 - `Panel` da sidebar é `'explorer' | 'git' | 'database'`. Não recriar um painel de sidebar para a Home — já foi tentado e revertido a pedido do usuário (2026-09-26).
 - Gráfico de barras feito à mão (sem biblioteca nova), uma métrica só (total de tokens) por barra, cor `--accent`. Agrupamento dia/semana/mês trocado no cliente a partir dos dados diários vindos do backend.
 - Nunca usar tooltip flutuante sobre o gráfico — usar uma caixa de detalhe de altura fixa acima dele (mostra o total geral parado, ou o detalhamento do item sob o mouse). Isso valeu tanto na versão de sidebar (descartada) quanto na aba atual.

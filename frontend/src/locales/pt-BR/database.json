@@ -1,0 +1,138 @@
+{
+  "loading": "Carregando…",
+  "panel": {
+    "title": "BANCO DE DADOS",
+    "connections": "CONEXÕES",
+    "savedQueries": "QUERIES SALVAS",
+    "newFolder": "Nova Pasta",
+    "newFolderEllipsis": "Nova Pasta…",
+    "newConnection": "Nova Conexão",
+    "newQuery": "Nova Query",
+    "openLastUsedQuery": "Abrir Última Query Usada",
+    "edit": "Editar",
+    "rename": "Renomear",
+    "reconnect": "Reconectar",
+    "moveToFolder": "Mover para pasta",
+    "noFolder": "Sem pasta",
+    "deleteFolder": "Excluir Pasta",
+    "folderNamePlaceholder": "nome da pasta",
+    "connectedSuccessfully": "Conectado com sucesso",
+    "test": "Testar",
+    "noConnectionsYet": "Nenhuma conexão ainda. Clique em + para adicionar uma.",
+    "noSavedQueriesYet": "Nenhuma query salva ainda. Rode uma query e ela salva automaticamente.",
+    "untitled": "Sem título",
+    "untitledQuery": "Query sem título",
+    "connectionsNoun": "Conexões",
+    "queriesNoun": "Queries",
+    "deleteConnectionConfirm": "Excluir conexão <b>{{name}}</b>?",
+    "deleteQueryConfirm": "Excluir query salva <b>{{name}}</b>?",
+    "deleteFolderConfirm": "Excluir pasta <b>{{name}}</b>? {{noun}} dentro permanecem, só ficam sem agrupamento.",
+    "form": {
+      "name": "Nome",
+      "host": "Host",
+      "port": "Porta",
+      "user": "Usuário",
+      "password": "Senha",
+      "passwordKeepCurrent": "Senha (deixe em branco para manter a atual)",
+      "databaseOptional": "Banco de dados (opcional — trava a árvore nele)"
+    }
+  },
+  "querySearch": {
+    "placeholder": "Buscar queries salvas…",
+    "untitledQuery": "Query sem título",
+    "noSavedQueriesYet": "Nenhuma query salva ainda",
+    "noMatch": "Nenhuma query salva corresponde a \"{{query}}\""
+  },
+  "queryTab": {
+    "selectConnection": "Selecionar conexão…",
+    "selectDatabase": "Selecionar banco…",
+    "new": "Nova",
+    "newQueryTitle": "Nova query",
+    "saveQueryTitle": "Salvar query (Cmd/Ctrl+S)",
+    "saved": "Salva",
+    "runTitle": "Roda a seleção, ou o statement sob o cursor (Cmd/Ctrl+Enter) — conecta automaticamente se só houver uma conexão/banco disponível",
+    "running": "Rodando…",
+    "run": "Rodar",
+    "emptyResultsMessage": "Posicione o cursor num statement (ou selecione um ou mais, separados por ';') e rode — Cmd/Ctrl+Enter.",
+    "errors": {
+      "noConnectionConfigured": "Nenhuma conexão de banco configurada ainda. Adicione uma na barra lateral de Banco de Dados.",
+      "selectConnectionFirst": "Selecione uma conexão acima antes de rodar — mais de uma está configurada, não dá pra adivinhar.",
+      "noDatabasesAvailable": "Essa conexão não tem bancos de dados pra rodar.",
+      "selectDatabaseFirst": "Selecione um banco acima antes de rodar — mais de um está disponível, não dá pra adivinhar.",
+      "couldNotListDatabases": "Não foi possível listar os bancos de dados: {{message}}"
+    }
+  },
+  "resultsGrid": {
+    "ranCount": "Rodou {{count}} statements, mostrando o último",
+    "rowCount_one": "{{count}} linha",
+    "rowCount_other": "{{count}} linhas",
+    "truncatedAt": "truncado em {{count}}",
+    "rowsAffected_one": "{{count}} linha afetada",
+    "rowsAffected_other": "{{count}} linhas afetadas",
+    "downloadCSV": "Baixar CSV",
+    "copyAsTSV": "Copiar como TSV",
+    "copy": "Copiar",
+    "copied": "Copiado!"
+  },
+  "tableTab": {
+    "data": "Dados",
+    "properties": "Propriedades",
+    "filterPlaceholder": "WHERE coluna = 'valor' …",
+    "running": "Rodando…",
+    "filter": "Filtrar",
+    "heavyQueryWarning": "Essa consulta parece pesada — o <code>EXPLAIN</code> estima ~{{estimate}} linhas escaneadas. Filtrar mesmo assim?",
+    "filterAnyway": "Filtrar mesmo assim"
+  },
+  "tableProperties": {
+    "yes": "Sim",
+    "no": "Não",
+    "sections": {
+      "constraints": "Constraints",
+      "foreignKeys": "Chaves Estrangeiras",
+      "references": "Referências",
+      "triggers": "Triggers",
+      "indexes": "Índices",
+      "partitions": "Partições",
+      "statistics": "Estatísticas",
+      "ddl": "DDL"
+    },
+    "columns": {
+      "name": "Nome",
+      "type": "Tipo",
+      "columns": "Colunas",
+      "column": "Coluna",
+      "references": "Referências",
+      "from": "De",
+      "timing": "Momento",
+      "event": "Evento",
+      "statement": "Statement",
+      "unique": "Único",
+      "method": "Método",
+      "expression": "Expressão",
+      "description": "Descrição",
+      "rows": "Linhas",
+      "metric": "Métrica",
+      "value": "Valor"
+    },
+    "empty": {
+      "constraints": "Nenhuma constraint nesta tabela.",
+      "foreignKeys": "Nenhuma chave estrangeira nesta tabela.",
+      "references": "Nenhuma referência de entrada nesta tabela.",
+      "triggers": "Nenhum trigger nesta tabela.",
+      "indexes": "Nenhum índice nesta tabela.",
+      "partitions": "Nenhuma partição — esta tabela não é particionada.",
+      "statistics": "Sem estatísticas para esta tabela."
+    },
+    "stats": {
+      "engine": "Engine",
+      "rowsEstimate": "Linhas (estimativa)",
+      "dataLength": "Tamanho dos dados",
+      "indexLength": "Tamanho do índice",
+      "avgRowLength": "Tamanho médio da linha",
+      "autoIncrement": "Auto increment",
+      "collation": "Collation",
+      "created": "Criado em",
+      "updated": "Atualizado em"
+    }
+  }
+}

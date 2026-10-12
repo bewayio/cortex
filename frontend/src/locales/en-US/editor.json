@@ -1,0 +1,32 @@
+{
+  "empty": {
+    "openFileToStart": "Open a file to start editing"
+  },
+  "overwrite": {
+    "title": "File changed externally",
+    "message": "<b>{{name}}</b> was changed outside the app while you had unsaved changes here. Saving now overwrites that external change.",
+    "saveAnyway": "Save Anyway"
+  },
+  "tabBar": {
+    "externallyChanged": "Changed on disk outside the app — not reloaded because this tab has unsaved changes",
+    "modeCode": "Code (⌘+1)",
+    "modePreview": "Preview",
+    "modeDiff": "Diff (⌘+2)",
+    "unpinTab": "Unpin Tab",
+    "pinTab": "Pin Tab",
+    "closeOthers": "Close Others",
+    "closeAll": "Close All",
+    "copyPath": "Copy Path",
+    "commitTitle": "Commit {{hash}}"
+  },
+  "markdownPreview": {
+    "renderFailed": "Failed to render markdown."
+  },
+  "diagrams": {
+    "rendering": "Rendering…",
+    "clickToExpand": "Click to expand",
+    "mermaidError": "Mermaid error: {{error}}",
+    "plantumlError": "PlantUML error: {{error}}",
+    "plantumlAlt": "PlantUML diagram"
+  }
+}

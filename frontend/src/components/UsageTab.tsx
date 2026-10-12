@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Home, Keyboard } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { GetClaudeTokenUsage } from '../../wailsjs/go/main/App'
 import WorkspaceList from './WorkspaceList'
 import { usePlatform } from '../utils/platform'
@@ -80,19 +81,20 @@ function formatTokens(n: number): string {
 // Aba de boas-vindas de uso: gráfico de tokens do Claude Code no topo, projetos
 // recentes embaixo. Abre no editor (estilo "Welcome" do VS Code), não na
 // sidebar — veja ADR/spec em .specs/modules/usage.md.
-const SHORTCUTS: { combo: string; desc: string }[] = [
-  { combo: 'Mod+Tab', desc: 'Next tab' },
-  { combo: 'Mod+Shift+Tab', desc: 'Previous tab' },
-  { combo: 'Mod+P', desc: 'Go to file' },
-  { combo: 'Mod+Shift+P', desc: 'Command palette' },
-  { combo: 'Mod+Q', desc: 'Last used query (focus if already open)' },
-  { combo: 'Mod+Enter', desc: 'File explorer: open focused file' },
-  { combo: 'Mod+Enter', desc: 'Database tree: open latest query for node' },
-  { combo: 'Mod+=/-/0', desc: 'Zoom in / out / reset' },
-  { combo: 'Ctrl+`', desc: 'Toggle terminal' },
+const SHORTCUTS: { combo: string; descKey: string }[] = [
+  { combo: 'Mod+Tab', descKey: 'nextTab' },
+  { combo: 'Mod+Shift+Tab', descKey: 'previousTab' },
+  { combo: 'Mod+P', descKey: 'goToFile' },
+  { combo: 'Mod+Shift+P', descKey: 'commandPalette' },
+  { combo: 'Mod+Q', descKey: 'lastUsedQuery' },
+  { combo: 'Mod+Enter', descKey: 'explorerOpenFocused' },
+  { combo: 'Mod+Enter', descKey: 'databaseOpenLatest' },
+  { combo: 'Mod+=/-/0', descKey: 'zoom' },
+  { combo: 'Ctrl+`', descKey: 'toggleTerminal' },
 ]
 
 export default function UsageTab({ onOpenWorkspace }: Props) {
+  const { t } = useTranslation('usage')
   const platform = usePlatform()
   const modLabel = platform === 'darwin' ? 'Cmd' : 'Ctrl'
   const [days, setDays] = useState<DailyUsage[] | null>(null)
@@ -118,14 +120,14 @@ export default function UsageTab({ onOpenWorkspace }: Props) {
         <div className="usage-tab-header">
           <Home size={22} style={{ color: 'var(--accent)' }} />
           <div>
-            <div className="usage-tab-title">Home</div>
-            <div className="usage-tab-subtitle">Claude Code token usage on this machine</div>
+            <div className="usage-tab-title">{t('title')}</div>
+            <div className="usage-tab-subtitle">{t('subtitle')}</div>
           </div>
         </div>
 
         <div className="usage-tab-chart-card">
           <div className="usage-chart-header">
-            <span className="usage-chart-title">Tokens</span>
+            <span className="usage-chart-title">{t('tokens')}</span>
             <div className="usage-grouping">
               {(['day', 'week', 'month'] as Grouping[]).map(g => (
                 <button
@@ -133,18 +135,18 @@ export default function UsageTab({ onOpenWorkspace }: Props) {
                   className={`usage-grouping-btn ${grouping === g ? 'active' : ''}`}
                   onClick={() => setGrouping(g)}
                 >
-                  {g}
+                  {t(`grouping.${g}`)}
                 </button>
               ))}
             </div>
           </div>
 
           {days === null ? (
-            <div className="usage-empty">Loading…</div>
+            <div className="usage-empty">{t('loading')}</div>
           ) : error ? (
-            <div className="usage-empty">Could not read ~/.claude usage data.</div>
+            <div className="usage-empty">{t('couldNotReadUsage')}</div>
           ) : buckets.length === 0 ? (
-            <div className="usage-empty">No Claude Code usage found on this machine yet.</div>
+            <div className="usage-empty">{t('noUsageFound')}</div>
           ) : (
             <>
               {/* Área de detalhe com altura fixa: total geral parado, ou o
@@ -153,17 +155,17 @@ export default function UsageTab({ onOpenWorkspace }: Props) {
                 <div className="usage-detail usage-detail-wide">
                   <div className="usage-detail-title">{buckets[hoverIdx].key}</div>
                   <div className="usage-detail-grid">
-                    <div className="usage-detail-row"><span>Input</span><span>{formatTokens(buckets[hoverIdx].inputTokens)}</span></div>
-                    <div className="usage-detail-row"><span>Output</span><span>{formatTokens(buckets[hoverIdx].outputTokens)}</span></div>
-                    <div className="usage-detail-row"><span>Cache write</span><span>{formatTokens(buckets[hoverIdx].cacheCreationTokens)}</span></div>
-                    <div className="usage-detail-row"><span>Cache read</span><span>{formatTokens(buckets[hoverIdx].cacheReadTokens)}</span></div>
+                    <div className="usage-detail-row"><span>{t('detail.input')}</span><span>{formatTokens(buckets[hoverIdx].inputTokens)}</span></div>
+                    <div className="usage-detail-row"><span>{t('detail.output')}</span><span>{formatTokens(buckets[hoverIdx].outputTokens)}</span></div>
+                    <div className="usage-detail-row"><span>{t('detail.cacheWrite')}</span><span>{formatTokens(buckets[hoverIdx].cacheCreationTokens)}</span></div>
+                    <div className="usage-detail-row"><span>{t('detail.cacheRead')}</span><span>{formatTokens(buckets[hoverIdx].cacheReadTokens)}</span></div>
                   </div>
-                  <div className="usage-detail-row usage-detail-total"><span>Total</span><span>{formatTokens(buckets[hoverIdx].total)}</span></div>
+                  <div className="usage-detail-row usage-detail-total"><span>{t('detail.total')}</span><span>{formatTokens(buckets[hoverIdx].total)}</span></div>
                 </div>
               ) : (
                 <div className="usage-detail usage-detail-wide usage-detail-idle">
                   <div className="usage-detail-total-only">{formatTokens(totalAll)}</div>
-                  <div className="usage-detail-hint">tokens total — hover a bar for the breakdown</div>
+                  <div className="usage-detail-hint">{t('detail.hoverHint')}</div>
                 </div>
               )}
               <div className="usage-chart usage-chart-wide" onMouseLeave={() => setHoverIdx(null)}>
@@ -189,12 +191,12 @@ export default function UsageTab({ onOpenWorkspace }: Props) {
 
         <div className="usage-tab-chart-card">
           <div className="usage-chart-header">
-            <span className="usage-chart-title"><Keyboard size={12} /> Shortcuts</span>
+            <span className="usage-chart-title"><Keyboard size={12} /> {t('shortcutsTitle')}</span>
           </div>
           <div className="usage-shortcuts-grid">
             {SHORTCUTS.map((s, i) => (
               <div className="usage-shortcut-row" key={i}>
-                <span>{s.desc}</span>
+                <span>{t(`shortcuts.${s.descKey}`)}</span>
                 <span className="usage-shortcut-key">{s.combo.replace('Mod', modLabel)}</span>
               </div>
             ))}

@@ -1,9 +1,10 @@
-import React, { useRef } from 'react'
+import React from 'react'
 import { FilePlus, FolderPlus, ChevronsUpDown } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import WorkspaceList from './WorkspaceList'
 import FileExplorer, { FileExplorerHandle } from './FileExplorer'
 import GitPanel from './GitPanel'
-import DatabasePanel from './DatabasePanel'
+import DatabasePanel, { DatabasePanelHandle } from './DatabasePanel'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 
 type Panel = 'explorer' | 'git' | 'database'
@@ -11,18 +12,23 @@ type Panel = 'explorer' | 'git' | 'database'
 interface Props {
   activePanel: Panel
   onOpenWorkspace: (path: string) => void
+  // Criados em App.tsx (não aqui) — o atalho global Ctrl/Cmd+N /
+  // Ctrl/Cmd+Shift+N precisa chamar essas ações de fora da sidebar,
+  // dependendo de qual painel está ativo.
+  explorerActionsRef: React.MutableRefObject<FileExplorerHandle | null>
+  dbActionsRef: React.MutableRefObject<DatabasePanelHandle | null>
 }
 
-export default function Sidebar({ activePanel, onOpenWorkspace }: Props) {
+export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsRef, dbActionsRef }: Props) {
+  const { t } = useTranslation('shell')
   const { currentWorkspace } = useWorkspaceStore()
-  const explorerActionsRef = useRef<FileExplorerHandle | null>(null)
 
   // O painel de banco de dados é autônomo (conexões são globais, não ligadas
   // a um workspace) — não usa a seção de WorkspaceList compartilhada.
   if (activePanel === 'database') {
     return (
       <div className="sidebar-inner">
-        <DatabasePanel />
+        <DatabasePanel actionRef={dbActionsRef} />
       </div>
     )
   }
@@ -37,27 +43,27 @@ export default function Sidebar({ activePanel, onOpenWorkspace }: Props) {
 
       {/* Cabeçalho do painel com botões de ação à direita */}
       <div className="sidebar-panel-header">
-        <span>{activePanel === 'explorer' ? 'EXPLORER' : 'SOURCE CONTROL'}</span>
+        <span>{activePanel === 'explorer' ? t('sidebar.explorer') : t('sidebar.sourceControl')}</span>
         {activePanel === 'explorer' && currentWorkspace && (
           <div className="sidebar-header-actions">
             <button
               className="sidebar-header-btn"
               onClick={() => explorerActionsRef.current?.addFile()}
-              title="New File"
+              title={t('sidebar.newFile')}
             >
               <FilePlus size={14} />
             </button>
             <button
               className="sidebar-header-btn"
               onClick={() => explorerActionsRef.current?.addFolder()}
-              title="New Folder"
+              title={t('sidebar.newFolder')}
             >
               <FolderPlus size={14} />
             </button>
             <button
               className="sidebar-header-btn"
               onClick={() => explorerActionsRef.current?.collapseAll()}
-              title="Collapse All"
+              title={t('sidebar.collapseAll')}
             >
               <ChevronsUpDown size={14} />
             </button>
@@ -71,7 +77,7 @@ export default function Sidebar({ activePanel, onOpenWorkspace }: Props) {
             <FileExplorer actionRef={explorerActionsRef} />
           ) : (
             <div className="no-workspace">
-              <div className="no-workspace-text">Open a folder to start editing</div>
+              <div className="no-workspace-text">{t('sidebar.openFolderToStart')}</div>
             </div>
           )
         ) : (

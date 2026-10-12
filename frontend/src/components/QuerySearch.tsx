@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Search, FileText } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 import { ListSavedQueries, ListDBConnections } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models'
 
@@ -22,6 +23,7 @@ function score(sq: SavedQuery, connName: string, q: string): number {
 }
 
 export default function QuerySearch({ onClose, onSelect }: Props) {
+  const { t } = useTranslation('database')
   const [queries, setQueries] = useState<SavedQuery[]>([])
   const [connNames, setConnNames] = useState<Record<string, string>>({})
   const [query, setQuery] = useState('')
@@ -85,7 +87,7 @@ export default function QuerySearch({ onClose, onSelect }: Props) {
           <input
             ref={inputRef}
             className="file-search-input"
-            placeholder="Search saved queries…"
+            placeholder={t('querySearch.placeholder')}
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -102,7 +104,7 @@ export default function QuerySearch({ onClose, onSelect }: Props) {
                 onMouseDown={() => onSelect(sq)}
               >
                 <FileText size={13} style={{ color: '#e5c07b', flexShrink: 0, marginRight: 6 }} />
-                <span className="file-search-name">{sq.name || 'Untitled query'}</span>
+                <span className="file-search-name">{sq.name || t('querySearch.untitledQuery')}</span>
                 <span className="file-search-path">{connNames[sq.connectionId] || sq.connectionId}{sq.database ? ` / ${sq.database}` : ''}</span>
               </div>
             ))}
@@ -111,7 +113,9 @@ export default function QuerySearch({ onClose, onSelect }: Props) {
 
         {results.length === 0 && (
           <div className="file-search-empty">
-            {queries.length === 0 ? 'No saved queries yet' : `No saved queries match "${query}"`}
+            {queries.length === 0
+              ? t('querySearch.noSavedQueriesYet')
+              : <Trans t={t} i18nKey="querySearch.noMatch" values={{ query }} />}
           </div>
         )}
       </div>

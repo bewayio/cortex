@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import ActivityBar from './components/ActivityBar'
 import Sidebar from './components/Sidebar'
+import { FileExplorerHandle } from './components/FileExplorer'
+import { DatabasePanelHandle } from './components/DatabasePanel'
 import EditorPane from './components/EditorPane'
 import Terminal from './components/Terminal'
 import StatusBar from './components/StatusBar'
@@ -16,6 +18,9 @@ import {
 import FileSearch from './components/FileSearch'
 import CommandPalette from './components/CommandPalette'
 import QuerySearch from './components/QuerySearch'
+import ProjectSwitcher from './components/ProjectSwitcher'
+import SettingsModal from './components/SettingsModal'
+import { registerNewItemShortcut } from './utils/newItemShortcut'
 import { usePlatform } from './utils/platform'
 import {
   GetRecentWorkspaces,
@@ -30,6 +35,7 @@ import {
   GetLastWorkspaceID,
   ReadFile,
   OpenDirectoryDialog,
+  WatchWorkspace,
   ListSavedQueries,
   ConfirmQuit,
 } from '../wailsjs/go/main/App'
@@ -63,9 +69,15 @@ export default function App() {
   const [showFileSearch, setShowFileSearch]   = useState(false)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [showQuerySearch, setShowQuerySearch] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Overlay de troca de projeto (Ctrl/Cmd+↑/↓, segura-e-solta) — vive no
+  // workspaceStore, não como useState local (ver o comentário lá): precisa
+  // ser alcançável por um comando global do Monaco também, não só pelo
+  // listener de window abaixo.
+  const switcherIndex = useWorkspaceStore(s => s.switcherIndex)
   const platform = usePlatform()
 
-  const { setRecentWorkspaces, setEverOpenedWorkspaces, currentWorkspace, setCurrentWorkspace, setFileTree } =
+  const { recentWorkspaces, setRecentWorkspaces, setEverOpenedWorkspaces, currentWorkspace, setCurrentWorkspace, setFileTree } =
     useWorkspaceStore()
   const {
     setFontSize, fontSize, setViewMode, switchWorkspace, loadWorkspaceTabs, snapshotCurrentWs, cycleTab,
@@ -79,6 +91,13 @@ export default function App() {
 
   // Workspaces já carregados do disco nesta sessão (evita re-leitura ao trocar de volta)
   const loadedWs = useRef<Set<string>>(new Set())
+
+  // Ações de "criar novo item" expostas pela sidebar (Explorer/Database) —
+  // vivem aqui, não dentro de Sidebar.tsx, porque o atalho global
+  // Ctrl/Cmd+N / Ctrl/Cmd+Shift+N (abaixo) precisa acioná-las de fora,
+  // dependendo de qual painel está ativo.
+  const explorerActionsRef = useRef<FileExplorerHandle | null>(null)
+  const dbActionsRef = useRef<DatabasePanelHandle | null>(null)
 
   // ── Carrega os tabs de um workspace do disco ──────────────────────────────
   const loadTabsFromDisk = useCallback(async (ws: Workspace) => {
@@ -103,9 +122,13 @@ export default function App() {
           originalContent: content,
           isModified:      false,
           isCommitTab:     false,
+          pinned:          !!state.pinnedFiles?.includes(filePath),
         })
       } catch { /* arquivo pode ter sido deletado */ }
     }
+    // editorStore mantém as fixadas como prefixo contíguo de `tabs` — sort
+    // estável preserva a ordem salva dentro de cada grupo.
+    tabsToLoad.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
 
     const activeId = tabsToLoad.find(t => t.path === state.activeFile)?.id ?? tabsToLoad[0]?.id ?? null
     loadWorkspaceTabs(ws.id, tabsToLoad, activeId)
@@ -120,9 +143,11 @@ export default function App() {
     // restauráveis nem podem ser "o arquivo ativo" persistido.
     const isRealFileTab = (t: EditorTab) => !t.isCommitTab && !t.isGraphTab && !t.isUsageTab && !t.isQueryTab && !!t.path
     const openFiles = snap.tabs.filter(isRealFileTab).map(t => t.path!)
+    const pinnedFiles = snap.tabs.filter(t => isRealFileTab(t) && t.pinned).map(t => t.path!)
     const activeTab = snap.tabs.find(t => t.id === snap.activeTabId && isRealFileTab(t))
     await SaveWorkspaceState(ws.id, {
       openFiles,
+      pinnedFiles,
       activeFile:    activeTab?.path ?? '',
       viewMode:      useEditorStore.getState().viewMode,
       terminalCount: terminalCountRef.current,
@@ -149,6 +174,9 @@ export default function App() {
 
     switchWorkspace(id)
     setCurrentWorkspace(ws)
+    // WatchWorkspace já fecha o watcher do workspace anterior sozinho —
+    // não precisa de uma chamada de "parar" separada aqui.
+    WatchWorkspace(path).catch(console.error)
 
     // 4. Carrega do disco se ainda não foi carregado nesta sessão
     const [tree, recent, everOpened] = await Promise.all([
@@ -181,6 +209,7 @@ export default function App() {
 
       setCurrentWorkspace(lastWs)
       switchWorkspace(lastWs.id)
+      WatchWorkspace(lastWs.path).catch(console.error)
 
       const [tree, state] = await Promise.all([
         GetFileTree(lastWs.path).catch(() => null),
@@ -213,9 +242,11 @@ export default function App() {
             tabsToLoad.push({
               id: `file-${filePath}`, path: filePath, name, ext,
               content, originalContent: content, isModified: false, isCommitTab: false,
+              pinned: !!state.pinnedFiles?.includes(filePath),
             })
           } catch {}
         }
+        tabsToLoad.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
         const activeId = tabsToLoad.find(t => t.path === state.activeFile)?.id
           ?? tabsToLoad[0]?.id ?? null
         loadWorkspaceTabs(lastWs.id, tabsToLoad, activeId)
@@ -305,6 +336,40 @@ export default function App() {
     return unsub
   }, [persistCurrentWs])
 
+  // ── Mudanças externas no disco (fora do app) ──────────────────────────────
+  // WatchWorkspace (backend) publica "files:changed" (lista de paths,
+  // debounced) sempre que algo muda no workspace observado — outro editor,
+  // git checkout, um script. Dois efeitos:
+  // 1. Árvore do explorer: reconsulta GetFileTree por completo (simples pra
+  //    v1 — otimizar por diretório só se isso se provar lento na prática).
+  // 2. Abas abertas cujo path está entre os alterados: se não têm alteração
+  //    local não salva, recarregam sozinhas (reloadTabContent). Se têm,
+  //    não mexe no conteúdo — só marca externallyChanged pra um indicador
+  //    discreto (EditorTabBar.tsx), decisão do usuário (2026-10-11): nunca
+  //    descartar o que foi digitado sem salvar.
+  useEffect(() => {
+    const unsub = EventsOn('files:changed', async (paths: string[]) => {
+      const ws = useWorkspaceStore.getState().currentWorkspace
+      if (ws) {
+        const tree = await GetFileTree(ws.path).catch(() => null)
+        if (tree) setFileTree(tree)
+      }
+
+      const changedSet = new Set(paths)
+      const { tabs, reloadTabContent, markExternallyChanged } = useEditorStore.getState()
+      for (const tab of tabs) {
+        if (!tab.path || !changedSet.has(tab.path)) continue
+        if (tab.isModified) {
+          markExternallyChanged(tab.id)
+          continue
+        }
+        const content = await ReadFile(tab.path).catch(() => null)
+        if (content !== null) reloadTabContent(tab.id, content)
+      }
+    })
+    return unsub
+  }, [setFileTree])
+
   // Ctrl/Cmd+Q: reabre a última query usada (maior updatedAt entre todas as
   // salvas, de qualquer conexão) — se já estiver aberta, openOrFocusTab só
   // foca (dedupe por savedQueryId em editorStore.ts). Sem nenhuma query
@@ -332,6 +397,26 @@ export default function App() {
     } as any)
   }, [openOrFocusTab])
 
+  // ── Ctrl/Cmd+N e Ctrl/Cmd+Shift+N (novo item, contextual ao painel ativo) ─
+  // Explorer → arquivo/pasta (mesmo alvo do botão, ver FileExplorer.tsx);
+  // Database → conexão/pasta de conexões. Outro painel: não faz nada.
+  // Registrado também como comando global do Monaco (globalEditorShortcuts.ts)
+  // pelo mesmo motivo do Ctrl/Cmd+Tab e do project switcher — sem isso, não
+  // dispara com o foco dentro de um arquivo aberto.
+  const handleNewItemShortcut = useCallback((isFolder: boolean) => {
+    if (activePanel === 'explorer') {
+      if (isFolder) explorerActionsRef.current?.addFolder()
+      else explorerActionsRef.current?.addFile()
+    } else if (activePanel === 'database') {
+      if (isFolder) dbActionsRef.current?.newConnectionFolder()
+      else dbActionsRef.current?.newConnection()
+    }
+  }, [activePanel])
+
+  useEffect(() => {
+    registerNewItemShortcut(handleNewItemShortcut)
+  }, [handleNewItemShortcut])
+
   // ── Atalhos de teclado ────────────────────────────────────────────────────
   useEffect(() => {
     const isMac = platform === 'darwin'
@@ -349,10 +434,62 @@ export default function App() {
       }
       if (e.key.toLowerCase() === 'q' && mod && e.shiftKey) { e.preventDefault(); setShowQuerySearch(true) }
       else if (e.key.toLowerCase() === 'q' && mod) { e.preventDefault(); openLastUsedQuery() }
+      if (e.key.toLowerCase() === 'n' && mod) { e.preventDefault(); handleNewItemShortcut(e.shiftKey) }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [fontSize, setFontSize, platform, cycleTab, openOrFocusTab, openLastUsedQuery])
+  }, [fontSize, setFontSize, platform, cycleTab, openOrFocusTab, openLastUsedQuery, handleNewItemShortcut])
+
+  // ── Project switcher (Ctrl/Cmd+↑/↓, segura-e-solta) ──────────────────────
+  // Separado do efeito de atalhos acima porque precisa de um listener de
+  // keyup próprio (soltar o modificador confirma a troca) — os outros
+  // atalhos daqui são só keydown. Cada seta move o destaque (via
+  // cycleProjectSwitcher, no workspaceStore — ver o motivo lá); só confirma
+  // a troca de workspace de verdade ao soltar Ctrl/Cmd, pra não disparar uma
+  // troca real (reload da árvore, restauração de abas etc.) a cada tecla
+  // enquanto o usuário ainda está navegando pela lista.
+  //
+  // Bug relatado (2026-10-11): com o foco dentro do Monaco (um arquivo
+  // aberto), o ↑/↓ nunca chegava aqui — Monaco intercepta essas teclas antes
+  // de borbulhar pro window, mesma classe de bug já corrigida pro Ctrl/Cmd+Tab
+  // (ver globalEditorShortcuts.ts). O keyup do modificador sozinho (sem
+  // combinação) não é uma keybinding do Monaco, então continua chegando
+  // normalmente — só a parte de abrir/mover precisa do caminho duplicado via
+  // comando global do Monaco, não a de confirmar.
+  useEffect(() => {
+    const isMac = platform === 'darwin'
+    const modKey = isMac ? 'Meta' : 'Control'
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const mod = isMac ? e.metaKey : e.ctrlKey
+      if (!mod || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+      e.preventDefault()
+      useWorkspaceStore.getState().cycleProjectSwitcher(e.key === 'ArrowDown' ? 1 : -1)
+    }
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== modKey) return
+      const { switcherIndex, recentWorkspaces, closeProjectSwitcher } = useWorkspaceStore.getState()
+      if (switcherIndex !== null) {
+        const target = recentWorkspaces[switcherIndex]
+        if (target) handleOpenWorkspace(target.path)
+      }
+      closeProjectSwitcher()
+    }
+
+    const onKeyDownEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') useWorkspaceStore.getState().closeProjectSwitcher()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDownEscape)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDownEscape)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [platform, handleOpenWorkspace])
 
   // ── Resize sidebar ────────────────────────────────────────────────────────
   const handleSidebarResize = useCallback((e: React.MouseEvent) => {
@@ -397,7 +534,7 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      <TitleBar />
+      <TitleBar onOpenSettings={() => setSettingsOpen(true)} />
       <div className="app-main">
         <ActivityBar
           activePanel={activePanel}
@@ -406,7 +543,12 @@ export default function App() {
         />
         <div className="app-content">
           <div className="sidebar" style={{ width: sidebarWidth }}>
-            <Sidebar activePanel={activePanel} onOpenWorkspace={handleOpenWorkspace} />
+            <Sidebar
+              activePanel={activePanel}
+              onOpenWorkspace={handleOpenWorkspace}
+              explorerActionsRef={explorerActionsRef}
+              dbActionsRef={dbActionsRef}
+            />
             <div className="sidebar-resize-handle" onMouseDown={handleSidebarResize} />
           </div>
 
@@ -542,6 +684,16 @@ export default function App() {
           }}
         />
       )}
+
+      {switcherIndex !== null && (
+        <ProjectSwitcher
+          projects={recentWorkspaces}
+          highlightedIndex={switcherIndex}
+          onSelect={(ws) => { useWorkspaceStore.getState().closeProjectSwitcher(); handleOpenWorkspace(ws.path) }}
+        />
+      )}
+
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }

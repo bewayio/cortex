@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: tasks
-last_updated: 2026-09-27
-version: 1
+last_updated: 2026-10-11
+version: 5
 connections:
   parent: .specs/project/project-dna.md
   children: []
@@ -18,7 +18,7 @@ connections:
 
 ## Status
 
-planned
+`in-progress` — all 7 implementation phases done (see `.specs/tasks/pinned-tabs-plan.md`); kept out of `done` only because interactive GUI verification in `wails dev` needs the user (no GUI-automation tool available here). Re-activated 2026-10-11 (user bug report: Home currently does disappear on workspace switch, exactly as predicted below; this was never implemented after being specified 2026-09-27).
 
 ## Goal
 
@@ -45,14 +45,17 @@ The Home tab should be a permanent, icon-only, fixed-first-position tab that sur
 
 ## Acceptance Criteria
 
-1. ~~The Home tab renders icon-only (no text label) in the tab bar~~ — **shipped early, 2026-09-27** (`EditorTabBar.tsx`, scoped to `isUsageTab`), ahead of the rest of this task. Still needed here: always the first position, in a visually distinct fixed-left area that does not scroll with the rest of the tabs.
-2. Opening a file (or any other tab) while Home is open never removes or replaces Home — it stays exactly where it is, just no longer the active tab.
-3. Switching to a different workspace (Open Folder / clicking a project in the sidebar or Home lists) does not remove Home from view — today Home lives inside the same per-workspace tab cache as regular file tabs, so switching workspaces can currently make it disappear from the visible tab bar even though it isn't "closed"; this must no longer happen.
-4. Home can be closed like any tab (its own close button, or a context-menu "Close"), and reappears — pinned, first position — when the user clicks the Home button in `ActivityBar.tsx` again.
-5. Right-clicking any non-Home, non-singleton tab (a regular file, a query tab — commit/diff/graph tabs can be excluded if pinning them doesn't make sense, implementer's call, note the choice) shows a "Pin Tab" context-menu entry. Choosing it moves the tab into the fixed-left pinned area, immediately after Home (or after other already-pinned tabs, in the order they were pinned).
-6. A pinned (non-Home) tab's context menu instead shows "Unpin Tab", which moves it back into the normal, scrollable, reorderable tab area (at the end, or wherever is simplest — exact landing position is not specified).
-7. Pinned tabs (excluding Home, which is a global singleton) are remembered per workspace: closing and reopening the app, or switching away and back to the workspace, restores the same tabs as pinned.
-8. Pinned tabs (excluding Home) can still be closed normally; closing one just removes it, same as any tab — no special confirmation.
+1. [x] ~~The Home tab renders icon-only (no text label) in the tab bar~~ — **shipped early, 2026-09-27** (`EditorTabBar.tsx`, scoped to `isUsageTab`), ahead of the rest of this task. Now also always the first position, in a visually distinct fixed-left area (`.tab-bar-pinned`) that does not scroll with the rest of the tabs.
+2. [x] Opening a file (or any other tab) while Home is open never removes or replaces Home — it stays exactly where it is, just no longer the active tab. (Home lives in `editorStore`'s new `globalTabs`, untouched by any tab-opening logic that only ever touches `tabs`.)
+3. [x] Switching to a different workspace does not remove Home from view — fixed: Home moved out of the per-workspace `tabs` array (swapped by `switchWorkspace`'s cache) into a separate `globalTabs` state that `switchWorkspace` never touches.
+4. [x] Home can be closed like any tab (context-menu "Close" — no close button, consistent with its icon-only treatment), and reappears pinned-first when the user clicks the Home button again (`openOrFocusTab`'s `isUsageTab` branch re-adds it to `globalTabs`).
+5. [x] Right-clicking a non-Home, non-commit/graph tab shows "Pin Tab" (commit/diff/graph tabs excluded — implementer's call: pinning a commit diff view doesn't carry meaning). Choosing it moves the tab into the fixed-left area, after Home.
+6. [x] A pinned tab's context menu shows "Unpin Tab" instead, moving it back to the end of the normal scrollable area.
+7. [x] Pinned tabs (excluding Home) are remembered per workspace via a new `WorkspaceState.PinnedFiles` field, restored on reopening that workspace or relaunching the app.
+8. [x] Pinned tabs can still be closed normally — `closeTab` wasn't changed for this, pinned tabs are closed exactly like any other.
+
+**Verified:** `tsc --noEmit`, `vite build`, `go build ./...`, `go vet ./...`, `gofmt`, `wails build` all clean.
+**Not verified by the assistant** (no GUI-automation tool available — needs the user's own pass in `wails dev`): actually dragging/pinning/unpinning in the real UI, Home surviving a real workspace switch, pin state surviving an app restart.
 
 ## Implementation Notes
 
@@ -68,5 +71,5 @@ The Home tab should be a permanent, icon-only, fixed-first-position tab that sur
 ## Definition Of Done
 
 - [ ] Acceptance criteria 1–8 verified by hand in `wails dev` — this is almost entirely interactive tab-bar behavior (pin/unpin, drag reordering within groups, Home surviving a workspace switch, pin state surviving a restart) that cannot be verified by this assistant; be explicit about what was and wasn't clicked through.
-- [ ] `files.md`, `shell.md`, `workspace.md` updated from "Planned" to the shipped shape.
+- [x] `shell.md`, `workspace.md` updated from "Planned" to the shipped shape (`files` module doesn't have its own spec file in this project — tab-bar behavior lives under `shell.md`).
 - [ ] Sync Review completed if source docs changed.

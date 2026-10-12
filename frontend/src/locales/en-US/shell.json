@@ -1,0 +1,46 @@
+{
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "language": "Language"
+    }
+  },
+  "language": {
+    "pt-BR": "Português (Brasil)",
+    "es": "Español",
+    "en-US": "English"
+  },
+  "titleBar": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
+  "activityBar": {
+    "explorer": "Explorer (⌘+Shift+E)",
+    "sourceControl": "Source Control",
+    "database": "Database",
+    "toggleTerminal": "Toggle Terminal (Ctrl+`)"
+  },
+  "sidebar": {
+    "explorer": "EXPLORER",
+    "sourceControl": "SOURCE CONTROL",
+    "newFile": "New File",
+    "newFolder": "New Folder",
+    "collapseAll": "Collapse All",
+    "openFolderToStart": "Open a folder to start editing"
+  },
+  "statusBar": {
+    "text": "TEXT",
+    "modified": "Modified"
+  },
+  "workspaceList": {
+    "openProjects": "Open Projects",
+    "everOpened": "Ever Opened",
+    "openFolder": "Open Folder…",
+    "everOpenedSublabel": "Projects you've opened recently — click to reopen",
+    "removeFromHistory": "Remove from history permanently",
+    "closeKeepHistory": "Close (stays in Ever Opened history)",
+    "removeFromHistoryShort": "Remove from history"
+  }
+}

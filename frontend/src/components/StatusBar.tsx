@@ -1,10 +1,12 @@
 import React from 'react'
 import { GitBranch } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useGitStore } from '../stores/gitStore'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import { useEditorStore } from '../stores/editorStore'
 
 export default function StatusBar() {
+  const { t } = useTranslation('shell')
   const { branch } = useGitStore()
   const { currentWorkspace } = useWorkspaceStore()
   const { getActiveTab } = useEditorStore()
@@ -22,11 +24,11 @@ export default function StatusBar() {
       {activeTab && !activeTab.isCommitTab && (
         <>
           <div className="status-bar-item" style={{ marginLeft: 'auto' }}>
-            <span>{activeTab.ext.toUpperCase() || 'TEXT'}</span>
+            <span>{activeTab.ext.toUpperCase() || t('statusBar.text')}</span>
           </div>
           {activeTab.isModified && (
             <div className="status-bar-item" style={{ color: '#e5c07b' }}>
-              Modified
+              {t('statusBar.modified')}
             </div>
           )}
         </>

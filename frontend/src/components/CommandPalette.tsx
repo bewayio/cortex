@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Search } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 import { Command } from '../utils/commands'
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function CommandPalette({ commands, onClose }: Props) {
+  const { t } = useTranslation('commandPalette')
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -55,7 +57,7 @@ export default function CommandPalette({ commands, onClose }: Props) {
           <input
             ref={inputRef}
             className="file-search-input"
-            placeholder="Type a command…"
+            placeholder={t('placeholder')}
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -78,7 +80,9 @@ export default function CommandPalette({ commands, onClose }: Props) {
         )}
 
         {results.length === 0 && (
-          <div className="file-search-empty">No commands match "{query}"</div>
+          <div className="file-search-empty">
+            <Trans t={t} i18nKey="noMatch" values={{ query }} />
+          </div>
         )}
       </div>
     </div>

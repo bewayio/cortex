@@ -1,0 +1,21 @@
+{
+  "confirmDelete": {
+    "one": "Excluir <b>{{name}}</b>?",
+    "many": "Excluir <b>{{count}} itens</b>?"
+  },
+  "contextMenu": {
+    "open": "Abrir",
+    "rename": "Renomear",
+    "copyPath": "Copiar Caminho",
+    "revealInFinder": "Revelar no Finder",
+    "deleteCount": "Excluir {{count}} itens"
+  },
+  "create": {
+    "folderNamePlaceholder": "nome da pasta",
+    "fileNamePlaceholder": "nome do arquivo"
+  },
+  "fileSearch": {
+    "placeholder": "Buscar arquivos…",
+    "noMatch": "Nenhum arquivo corresponde a \"{{query}}\""
+  }
+}

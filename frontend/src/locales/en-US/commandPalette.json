@@ -1,0 +1,16 @@
+{
+  "placeholder": "Type a command…",
+  "noMatch": "No commands match \"{{query}}\"",
+  "commands": {
+    "newTerminal": "New Terminal",
+    "newQuery": "New Query",
+    "openFolder": "Open Folder",
+    "goToFile": "Go to File",
+    "toggleExplorer": "Toggle Explorer Panel",
+    "toggleGit": "Toggle Git Panel",
+    "toggleDatabase": "Toggle Database Panel",
+    "goHome": "Go Home",
+    "closeTab": "Close Tab",
+    "closeAllTabs": "Close All Tabs"
+  }
+}

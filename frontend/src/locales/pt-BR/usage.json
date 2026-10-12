@@ -1,0 +1,33 @@
+{
+  "title": "Home",
+  "subtitle": "Uso de tokens do Claude Code nesta máquina",
+  "tokens": "Tokens",
+  "grouping": {
+    "day": "dia",
+    "week": "semana",
+    "month": "mês"
+  },
+  "loading": "Carregando…",
+  "couldNotReadUsage": "Não foi possível ler os dados de uso em ~/.claude.",
+  "noUsageFound": "Nenhum uso do Claude Code encontrado nesta máquina ainda.",
+  "detail": {
+    "input": "Entrada",
+    "output": "Saída",
+    "cacheWrite": "Escrita de cache",
+    "cacheRead": "Leitura de cache",
+    "total": "Total",
+    "hoverHint": "tokens no total — passe o mouse numa barra pro detalhamento"
+  },
+  "shortcutsTitle": "Atalhos",
+  "shortcuts": {
+    "nextTab": "Próxima aba",
+    "previousTab": "Aba anterior",
+    "goToFile": "Ir para arquivo",
+    "commandPalette": "Paleta de comandos",
+    "lastUsedQuery": "Última query usada (foca se já estiver aberta)",
+    "explorerOpenFocused": "Explorer de arquivos: abrir arquivo em foco",
+    "databaseOpenLatest": "Árvore do banco: abrir última query do nó",
+    "zoom": "Aumentar / diminuir / resetar zoom",
+    "toggleTerminal": "Alternar terminal"
+  }
+}

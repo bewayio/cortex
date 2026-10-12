@@ -20,6 +20,7 @@ import (
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/creack/pty"
+	"github.com/fsnotify/fsnotify"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -86,6 +87,9 @@ type WorkspaceState struct {
 	ActiveFile    string   `json:"activeFile"`
 	ViewMode      string   `json:"viewMode"`
 	TerminalCount int      `json:"terminalCount"`
+	// Paths pinned in the tab bar for this workspace (see .specs/tasks/pinned-tabs.md).
+	// Home is not here — it's a global, workspace-independent tab, always pinned.
+	PinnedFiles []string `json:"pinnedFiles"`
 }
 
 // ─── Terminal ────────────────────────────────────────────────────────────────
@@ -106,6 +110,13 @@ type App struct {
 	chatMu        sync.Mutex
 	chatAbort     map[string]context.CancelFunc // sessionID → cancel
 	quitConfirmed bool                          // set by ConfirmQuit, see beforeClose
+
+	// Workspace filesystem watcher — see watcher.go.
+	fsWatcher *fsnotify.Watcher
+	fsWatchMu sync.Mutex
+	// Overridable for tests (bypasses runtime.EventsEmit, which needs a real
+	// Wails context); defaults to the real emit inside WatchWorkspace.
+	fsWatchEmit func(paths []string)
 }
 
 // Mensagem do chat (espelho do frontend)
@@ -290,7 +301,9 @@ func (a *App) GetEverOpenedWorkspaces() []Workspace {
 }
 
 // frontInsertCapped moves (or inserts) an entry to the front of a workspace
-// list by id, truncating to cap. Shared by both lists SaveWorkspace maintains.
+// list by id, truncating to cap. Used for "Ever opened" (ever_opened.json),
+// which stays most-recently-used-first — it's a history view, not something
+// the user hand-arranges.
 func frontInsertCapped(list []Workspace, entry Workspace, cap int) []Workspace {
 	filtered := make([]Workspace, 0, len(list)+1)
 	for _, w := range list {
@@ -305,9 +318,34 @@ func frontInsertCapped(list []Workspace, entry Workspace, cap int) []Workspace {
 	return out
 }
 
-// SaveWorkspace opens/switches to a workspace: moves it to the front of both
-// the "open projects" list (recent.json, capped) and the "ever opened" list
-// (ever_opened.json, capped), creating it if new, and marks it as last-active.
+// stableUpsertCapped keeps "Open projects" (recent.json) in a stable,
+// user-controlled order (2026-10-11, user request: stop reordering on every
+// open/switch — a project keeps its position; the only way it moves is the
+// user dragging it, via ReorderRecentWorkspaces). An existing entry is left
+// exactly where it is (only Name/Path refreshed, in case the folder was
+// renamed/moved); a new one is appended at the end. If that pushes the list
+// over cap, the front entry is evicted — the only "oldest" signal left once
+// there's no more most-recently-used reordering.
+func stableUpsertCapped(list []Workspace, entry Workspace, cap int) []Workspace {
+	for i, w := range list {
+		if w.ID == entry.ID {
+			out := append([]Workspace{}, list...)
+			out[i] = entry
+			return out
+		}
+	}
+	out := append(append([]Workspace{}, list...), entry)
+	if len(out) > cap {
+		out = out[len(out)-cap:]
+	}
+	return out
+}
+
+// SaveWorkspace opens/switches to a workspace: upserts it into "open
+// projects" (recent.json, capped, stable order — stays wherever it already
+// is, or gets appended if new) and moves it to the front of "ever opened"
+// (ever_opened.json, capped, most-recently-used-first), creating it if new,
+// and marks it as last-active.
 func (a *App) SaveWorkspace(path string) (string, error) {
 	recent := a.GetRecentWorkspaces()
 	everOpened := a.GetEverOpenedWorkspaces()
@@ -335,7 +373,7 @@ func (a *App) SaveWorkspace(path string) (string, error) {
 	}
 	entry := Workspace{ID: id, Name: name, Path: path}
 
-	recent = frontInsertCapped(recent, entry, recentWorkspacesCap)
+	recent = stableUpsertCapped(recent, entry, recentWorkspacesCap)
 	everOpened = frontInsertCapped(everOpened, entry, everOpenedWorkspacesCap)
 
 	recentData, err := json.Marshal(recent)
@@ -354,6 +392,40 @@ func (a *App) SaveWorkspace(path string) (string, error) {
 	}
 	_ = os.WriteFile(filepath.Join(bcodeDir(), "last_workspace.txt"), []byte(id), 0644)
 	return id, nil
+}
+
+// ReorderRecentWorkspaces persists the user's drag-reordered "Open projects"
+// list — the only way that list's order changes now (2026-10-11), since
+// SaveWorkspace keeps it stable otherwise (see stableUpsertCapped). Any id
+// not present in the given order is defensive handling against a stale or
+// partial list from the frontend — appended at the end, keeping its
+// relative order, rather than silently dropped.
+func (a *App) ReorderRecentWorkspaces(ids []string) error {
+	recent := a.GetRecentWorkspaces()
+	byID := make(map[string]Workspace, len(recent))
+	for _, w := range recent {
+		byID[w.ID] = w
+	}
+
+	ordered := make([]Workspace, 0, len(recent))
+	seen := make(map[string]bool, len(recent))
+	for _, id := range ids {
+		if w, ok := byID[id]; ok {
+			ordered = append(ordered, w)
+			seen[id] = true
+		}
+	}
+	for _, w := range recent {
+		if !seen[w.ID] {
+			ordered = append(ordered, w)
+		}
+	}
+
+	data, err := json.Marshal(ordered)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(bcodeDir(), "recent.json"), data, 0644)
 }
 
 func (a *App) GetLastWorkspaceID() string {

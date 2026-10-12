@@ -1,3 +1,5 @@
+import i18n from '../i18n'
+
 export interface Command {
   id: string
   label: string
@@ -18,16 +20,17 @@ export interface CommandContext {
 // Small, flat registry — extend here as new commands are added, no other
 // file needs to change (CommandPalette.tsx just filters/renders this list).
 export function buildCommands(ctx: CommandContext): Command[] {
+  const t = i18n.t.bind(i18n)
   return [
-    { id: 'new-terminal', label: 'New Terminal', run: ctx.onNewTerminal },
-    { id: 'new-query', label: 'New Query', run: ctx.onNewQuery },
-    { id: 'open-folder', label: 'Open Folder', run: ctx.onOpenFolder },
-    { id: 'go-to-file', label: 'Go to File', run: ctx.onGoToFile },
-    { id: 'toggle-explorer', label: 'Toggle Explorer Panel', run: () => ctx.onTogglePanel('explorer') },
-    { id: 'toggle-git', label: 'Toggle Git Panel', run: () => ctx.onTogglePanel('git') },
-    { id: 'toggle-database', label: 'Toggle Database Panel', run: () => ctx.onTogglePanel('database') },
-    { id: 'go-home', label: 'Go Home', run: ctx.onGoHome },
-    { id: 'close-tab', label: 'Close Tab', run: ctx.onCloseTab },
-    { id: 'close-all-tabs', label: 'Close All Tabs', run: ctx.onCloseAllTabs },
+    { id: 'new-terminal', label: t('commandPalette:commands.newTerminal'), run: ctx.onNewTerminal },
+    { id: 'new-query', label: t('commandPalette:commands.newQuery'), run: ctx.onNewQuery },
+    { id: 'open-folder', label: t('commandPalette:commands.openFolder'), run: ctx.onOpenFolder },
+    { id: 'go-to-file', label: t('commandPalette:commands.goToFile'), run: ctx.onGoToFile },
+    { id: 'toggle-explorer', label: t('commandPalette:commands.toggleExplorer'), run: () => ctx.onTogglePanel('explorer') },
+    { id: 'toggle-git', label: t('commandPalette:commands.toggleGit'), run: () => ctx.onTogglePanel('git') },
+    { id: 'toggle-database', label: t('commandPalette:commands.toggleDatabase'), run: () => ctx.onTogglePanel('database') },
+    { id: 'go-home', label: t('commandPalette:commands.goHome'), run: ctx.onGoHome },
+    { id: 'close-tab', label: t('commandPalette:commands.closeTab'), run: ctx.onCloseTab },
+    { id: 'close-all-tabs', label: t('commandPalette:commands.closeAllTabs'), run: ctx.onCloseAllTabs },
   ]
 }

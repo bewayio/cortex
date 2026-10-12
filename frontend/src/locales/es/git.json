@@ -1,0 +1,37 @@
+{
+  "changes": "Cambios",
+  "noChanges": "Sin cambios",
+  "commits": "Commits",
+  "openFullGraph": "Abrir grafo completo en pestaña",
+  "noCommitsFound": "No se encontraron commits",
+  "loading": "Cargando…",
+  "loadMore": "Cargar {{count}} más…",
+  "diff": {
+    "badgeDeleted": "ELIMINADO",
+    "badgeNew": "NUEVO",
+    "before": "antes",
+    "after": "después",
+    "fileRemoved": "— archivo eliminado —",
+    "newFile": "Archivo nuevo"
+  },
+  "commitDiff": {
+    "loadingCommit": "Cargando commit…",
+    "noCommitSelected": "Ningún commit seleccionado",
+    "couldNotLoad": "No se pudieron cargar los datos del commit",
+    "collapseAll": "Contraer Todo",
+    "expandAll": "Expandir Todo",
+    "fileCount_one": "{{count}} archivo",
+    "fileCount_other": "{{count}} archivos",
+    "searchTitle": "Buscar (⌘+F)",
+    "searchPlaceholder": "Buscar archivos o contenido…",
+    "matchCount_one": "{{count}} coincidencia",
+    "matchCount_other": "{{count}} coincidencias",
+    "noFilesMatchSearch": "Ningún archivo coincide con la búsqueda."
+  },
+  "graphTab": {
+    "title": "GRAFO",
+    "filterPlaceholder": "Filtrar commits…",
+    "searchTitle": "Buscar (⌘F)",
+    "noCommitsMatch": "Ningún commit coincide"
+  }
+}

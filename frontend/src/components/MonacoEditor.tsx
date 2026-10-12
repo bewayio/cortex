@@ -95,9 +95,10 @@ interface Props {
   onChange: (value: string) => void
   onMonacoReady?: (monaco: Parameters<BeforeMount>[0]) => void
   onEditorMount?: OnMount
+  readOnly?: boolean
 }
 
-export default function MonacoEditor({ path, content, ext, onChange, onMonacoReady, onEditorMount }: Props) {
+export default function MonacoEditor({ path, content, ext, onChange, onMonacoReady, onEditorMount, readOnly }: Props) {
   const { fontSize } = useEditorStore()
   const language = detectLanguage(path, ext)
 
@@ -141,6 +142,7 @@ export default function MonacoEditor({ path, content, ext, onChange, onMonacoRea
         guides: { indentation: true },
         suggest: { snippetsPreventQuickSuggestions: false },
         overviewRulerLanes: 0,
+        readOnly: !!readOnly,
       }}
     />
   )
