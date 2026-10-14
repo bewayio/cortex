@@ -108,7 +108,7 @@ export default function EditorPane({ onOpenWorkspace }: Props) {
       return (
         <div className="editor-empty">
           <div className="editor-empty-logo">{'<>'}</div>
-          <div style={{ fontSize: 16, color: 'var(--fg-dim)' }}>BCode</div>
+          <div style={{ fontSize: 16, color: 'var(--fg-dim)' }}>Cortex</div>
           <div style={{ fontSize: 13, color: 'var(--fg-dim)', opacity: 0.6 }}>
             {t('empty.openFileToStart')}
           </div>

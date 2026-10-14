@@ -39,16 +39,16 @@ jobs:
         include:
           - os: ubuntu-22.04
             platform: linux/amd64
-            bin: bcode
-            asset: bcode-linux-x86_64.AppImage
+            bin: cortex
+            asset: cortex-linux-x86_64.AppImage
           - os: macos-latest
             platform: darwin/universal
-            bin: bcode.app
-            asset: bcode-macos-universal.zip
+            bin: cortex.app
+            asset: cortex-macos-universal.zip
           - os: windows-latest
             platform: windows/amd64
-            bin: bcode.exe
-            asset: bcode-windows-amd64.zip
+            bin: cortex.exe
+            asset: cortex-windows-amd64.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +69,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
       # Same formula the publish job uses later to tag the release — computed
-      # here too so the binary's own `bcode --version` matches the release
+      # here too so the binary's own `cortex --version` matches the release
       # it ships in, without waiting on the publish job.
       - name: Compute version
         id: version
@@ -116,12 +116,12 @@ jobs:
         run: |
           mkdir -p AppDir/usr/bin
           cp build/bin/${{ matrix.bin }} AppDir/usr/bin/
-          cp build/linux/bcode.desktop AppDir/bcode.desktop
+          cp build/linux/cortex.desktop AppDir/cortex.desktop
 
           # linuxdeploy only accepts a fixed list of icon resolutions;
           # build/appicon.png is 1024x1024 (not in that list), so resize
           # down to 512x512 (the largest valid size) for the AppImage icon.
-          convert build/appicon.png -resize 512x512 AppDir/bcode.png
+          convert build/appicon.png -resize 512x512 AppDir/cortex.png
 
           # WebKitGTK spawns WebKitNetworkProcess/WebKitWebProcess as separate
           # helper binaries, looked up via an ABSOLUTE PATH COMPILED INTO
@@ -175,8 +175,8 @@ jobs:
           # AppDir/AppRun from scratch and would wipe the patch below.
           ./linuxdeploy --appdir AppDir \
             --executable AppDir/usr/bin/${{ matrix.bin }} \
-            --desktop-file AppDir/bcode.desktop \
-            --icon-file AppDir/bcode.png \
+            --desktop-file AppDir/cortex.desktop \
+            --icon-file AppDir/cortex.png \
             --plugin gtk
 
           python3 - <<'PYEOF'
@@ -236,11 +236,25 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path build/bin/${{ matrix.bin }} -DestinationPath ${{ matrix.asset }}
 
+      # Published once (Linux leg only — it's platform-independent) so
+      # third-party installers (e.g. a raw-AppImage install on Linux, which
+      # has no bundle/theme icon of its own the way the macOS .app or the
+      # Windows .exe resource do) have something to fetch and install into
+      # the icon theme instead of falling back to a generic placeholder.
+      # See .specs/modules/release.md's 2026-10-13 entry.
+      - name: Prepare icon asset (Linux leg only)
+        if: matrix.os == 'ubuntu-22.04'
+        run: cp build/appicon.png cortex-icon.png
+
       # One sha256 file per asset — the publish job bundles these into a
       # single checksums.txt, and the cask formula pins these exact values.
       - name: Checksum (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: shasum -a 256 ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
+
+      - name: Checksum icon (Linux leg only)
+        if: matrix.os == 'ubuntu-22.04'
+        run: shasum -a 256 cortex-icon.png > cortex-icon.png.sha256
 
       - name: Checksum (Windows)
         if: matrix.os == 'windows-latest'
@@ -253,6 +267,14 @@ jobs:
           path: |
             ${{ matrix.asset }}
             ${{ matrix.asset }}.sha256
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-22.04'
+        with:
+          name: cortex-icon.png
+          path: |
+            cortex-icon.png
+            cortex-icon.png.sha256
 
   publish:
     needs: build
@@ -301,7 +323,7 @@ jobs:
           BCODE_RELEASE_TOKEN: ${{ secrets.BCODE_RELEASE_TOKEN }}
           VERSION: ${{ steps.version.outputs.value }}
         run: |
-          SHA256=$(grep "bcode-macos-universal.zip" artifacts/checksums.txt | awk '{print $1}')
+          SHA256=$(grep "cortex-macos-universal.zip" artifacts/checksums.txt | awk '{print $1}')
 
           git clone "https://x-access-token:${BCODE_RELEASE_TOKEN}@github.com/bewayio/homebrew-bcode.git" tap
           cd tap

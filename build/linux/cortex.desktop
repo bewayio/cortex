@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=BCode
+Name=Cortex
 Comment=Lightweight desktop code workbench
-Exec=bcode
-Icon=bcode
+Exec=cortex
+Icon=cortex
 Categories=Development;IDE;
 Terminal=false

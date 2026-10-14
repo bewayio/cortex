@@ -1,13 +1,16 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "bcode",
-  "outputfilename": "bcode",
+  "name": "cortex",
+  "outputfilename": "cortex",
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "BCode",
+    "name": "Cortex",
     "email": ""
+  },
+  "info": {
+    "productName": "Cortex"
   }
 }

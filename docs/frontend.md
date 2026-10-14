@@ -18,7 +18,7 @@ Definidos em `frontend/src/styles/theme.css`. Fundo `#1e1e1e`, sidebar `#252526`
 
 ## Ícone do app
 
-- Fonte única: `build/appicon.png` (1024×1024, fundo transparente). Trocado em 2026-09-25.
+- Fonte: `build/appicon.png` (1024×1024, fundo transparente). Trocado em 2026-09-25, redesenhado em 2026-10-13 (logo do rename pra "Cortex" — motivo cérebro/circuito). `build/appicon.svg` é a fonte vetorial do desenho atual (círculos sobrepostos formando os hemisférios + nós de circuito), caso precise reexportar em outro tamanho/formato — rasterizada com `@resvg/resvg-js` (instalado pontualmente, não é dependência do projeto).
 - O `wails build` gera o ícone por sistema a partir desse arquivo, no próprio sistema. Um build feito no Linux não atualiza o `.icns` de um `.app` do macOS já existente em `build/bin` — refazer o build no macOS quando o ícone mudar.
 
 ## Aba de uso / Home (editor, não sidebar)

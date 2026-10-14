@@ -47,7 +47,7 @@ export default function TitleBar({ onOpenSettings }: Props) {
       >
         <Settings size={14} />
       </button>
-      <span className="app-titlebar-title">BCode</span>
+      <span className="app-titlebar-title">Cortex</span>
       {showButtons && (
         <div className="app-titlebar-controls" onDoubleClick={e => e.stopPropagation()}>
           <button className="app-titlebar-btn" title={t('titleBar.minimize')} aria-label={t('titleBar.minimize')} onClick={() => WindowMinimise()}>
