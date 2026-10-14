@@ -441,6 +441,77 @@
   background: var(--accent);
 }
 
+/* ConnectionModal.tsx — modal de criar/editar conexão MySQL, 3 abas
+   (Geral / Túnel SSH / Extra Params), 2026-10-14. Reaproveita
+   .modal-overlay/.modal-dialog-wide já existentes (SettingsModal.tsx). */
+.connection-modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.connection-modal-tab {
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 10px 12px;
+  border-bottom: 2px solid transparent;
+}
+.connection-modal-tab:hover { color: var(--fg); }
+.connection-modal-tab.active { color: var(--fg-active); border-bottom-color: var(--accent); }
+.connection-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 280px;
+}
+.connection-modal-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.connection-modal-hint {
+  font-size: 11px;
+  color: var(--fg-dim);
+  padding: 0 12px 10px;
+}
+.connection-modal-params { padding: 10px 12px; }
+.connection-modal-params-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+.connection-modal-params-table th {
+  text-align: left;
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-weight: 400;
+  padding: 4px 6px;
+}
+.connection-modal-params-table td { padding: 3px 6px; }
+.connection-modal-add-param {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--divider);
+  color: var(--fg-dim);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 4px 10px;
+}
+.connection-modal-add-param:hover { background: rgba(255,255,255,0.06); color: var(--fg); }
+.connection-modal-actions { padding: 10px 16px 16px; margin-bottom: 0; }
+
 /* Input inline para criar/renomear */
 .file-tree-create-row {
   display: flex;

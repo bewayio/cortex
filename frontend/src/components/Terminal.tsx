@@ -5,14 +5,74 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import '@xterm/xterm/css/xterm.css'
-import { StartTerminal, TerminalInput, TerminalResize, CloseTerminal } from '../../wailsjs/go/main/App'
+import { StartTerminal, TerminalInput, TerminalResize, CloseTerminal, ReadFile } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { usePlatform } from '../utils/platform'
 import { useWorkspaceStore } from '../stores/workspaceStore'
+import { useEditorStore } from '../stores/editorStore'
+import type { ILink, ILinkProvider } from '@xterm/xterm'
 
 // Shift+Enter envia LF (Ctrl+J): Claude Code e Codex tratam como nova linha no prompt.
 // Num shell comum equivale a Enter.
 const SHIFT_ENTER_INPUT = '\n'
+
+// Links clicáveis (Ctrl/Cmd+click) na saída do terminal, 2026-10-14. Só
+// caminho ABSOLUTO vira link — decisão confirmada com o usuário: o terminal
+// não acompanha o cwd ao vivo do shell (workdirRef só guarda a pasta em que
+// foi aberto, não atualiza depois de um `cd`), então resolver caminho
+// relativo contra ela arriscaria abrir o arquivo errado. Ver
+// .specs/tasks/terminal-clickable-links.md.
+const TERMINAL_URL_REGEX = /https?:\/\/[^\s'"<>]+/g
+const TERMINAL_ABS_PATH_REGEX = /(?:~\/|\/|[A-Za-z]:\\)[^\s'"<>]+/g
+
+function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number) {
+  return aStart <= bEnd && bStart <= aEnd
+}
+
+// Um ILinkProvider por instância de xterm (cada aba de terminal cria o seu).
+// `provideLinks` roda sob demanda, linha por linha do buffer visível — nada
+// de reprocessar a saída inteira a cada escrita.
+function registerTerminalLinkProvider(xterm: XTerm, isMac: () => boolean, openFilePath: (path: string) => void) {
+  return xterm.registerLinkProvider({
+    provideLinks(bufferLineNumber, callback) {
+      const line = xterm.buffer.active.getLine(bufferLineNumber - 1)
+      if (!line) { callback(undefined); return }
+      const text = line.translateToString(true)
+
+      const links: ILink[] = []
+      const urlRanges: { start: number; end: number }[] = []
+
+      const makeLink = (start: number, end: number, matchedText: string, kind: 'url' | 'path'): ILink => ({
+        range: { start: { x: start + 1, y: bufferLineNumber }, end: { x: end, y: bufferLineNumber } },
+        text: matchedText,
+        activate: (event) => {
+          const mod = isMac() ? event.metaKey : event.ctrlKey
+          if (!mod) return
+          if (kind === 'url') BrowserOpenURL(matchedText)
+          else openFilePath(matchedText)
+        },
+      })
+
+      for (const m of text.matchAll(TERMINAL_URL_REGEX)) {
+        const start = m.index ?? 0
+        const end = start + m[0].length
+        urlRanges.push({ start, end })
+        links.push(makeLink(start, end, m[0], 'url'))
+      }
+      for (const m of text.matchAll(TERMINAL_ABS_PATH_REGEX)) {
+        const start = m.index ?? 0
+        const end = start + m[0].length
+        // Um caminho "http://..." bate nas duas regex (a barra depois dos
+        // dois-pontos) — não duplica como link de arquivo também.
+        if (urlRanges.some(u => rangesOverlap(start, end, u.start, u.end))) continue
+        links.push(makeLink(start, end, m[0], 'path'))
+      }
+
+      callback(links.length ? links : undefined)
+    },
+  })
+}
 // Ctrl+V como byte de controle cru (SYN), não como paste de texto do xterm.
 // claude/codex leem a área de transferência do SO por conta própria ao ver esse
 // byte, do mesmo jeito que fazem num terminal nativo (ADR-0008). Cmd+V no macOS
@@ -116,6 +176,20 @@ export default function Terminal({
     onTabCountChange?.('right',  tabList.filter(t => t.dock === 'right').length)
   }, [onTabCountChange])
 
+  // Ctrl/Cmd+click num caminho absoluto reconhecido pelo link provider abre
+  // o arquivo como aba — mesmo campo-a-campo já usado pelo clique de arquivo
+  // na sidebar (FileExplorer.tsx's openFile). Falha silenciosa (arquivo não
+  // existe/sem permissão) — sem mensagem de erro intrusiva, conforme já
+  // decidido na task.
+  const { openOrFocusTab } = useEditorStore()
+  const openFilePathAsTab = useCallback((path: string) => {
+    ReadFile(path).then(content => {
+      const name = path.split(/[\\/]/).pop() || path
+      const ext = name.includes('.') ? (name.split('.').pop() ?? '') : ''
+      openOrFocusTab({ path, name, ext, content, originalContent: content, isModified: false, isCommitTab: false })
+    }).catch(() => {})
+  }, [openOrFocusTab])
+
   // ── Cria terminal PTY ─────────────────────────────────────────────────────
   const createTerminal = useCallback(async (tabDock: Dock = 'bottom'): Promise<TermTab | null> => {
     const wrapper = tabDock === 'bottom' ? wrapperBottomRef.current : wrapperRightRef.current
@@ -150,6 +224,7 @@ export default function Terminal({
     wrapper.appendChild(div)
     xterm.open(div)
     termDivs.current.set(id, div)
+    registerTerminalLinkProvider(xterm, () => platformRef.current === 'darwin', openFilePathAsTab)
 
     // O xterm repassa keydown, keypress e keyup ao handler. Retornar false só no keydown
     // deixa o keypress enviar um '\r' extra, e o CLI enviaria a mensagem. Bloqueia todos.

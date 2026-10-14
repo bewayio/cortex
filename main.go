@@ -64,6 +64,20 @@ func main() {
 		},
 		Linux: &linux.Options{
 			Icon: icon,
+			// GNOME (and most other WMs) resolve the Alt-Tab switcher's icon
+			// by matching the running window's WM_CLASS against an installed
+			// .desktop file's name, NOT from the window's own _NET_WM_ICON —
+			// that one only covers places that fall back to "whatever icon
+			// the app itself set" (app search/Activities overview already
+			// worked once cortex.desktop + the real icon were installed,
+			// 2026-10-13's fix). Without this, GTK derives WM_CLASS from
+			// argv[0]'s basename, which isn't reliably "cortex" depending on
+			// how the binary was launched (raw AppImage run vs. the
+			// installer's ~/.local/bin/cortex). ProgramName sets it via
+			// GTK's g_set_prgname() explicitly, matching build/linux/
+			// cortex.desktop's name so Alt-Tab can find it. Bug reported by
+			// the user, 2026-10-14.
+			ProgramName: "cortex",
 		},
 	})
 

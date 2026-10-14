@@ -134,5 +134,19 @@
       "created": "Created",
       "updated": "Updated"
     }
+  },
+  "connectionModal": {
+    "tabGeneral": "General",
+    "tabSSH": "SSH Tunnel",
+    "tabExtraParams": "Extra Params",
+    "useSSHTunnel": "Use SSH tunnel",
+    "sshHost": "SSH server host",
+    "sshPort": "SSH port",
+    "sshUser": "SSH user",
+    "sshPassword": "SSH password",
+    "sshHint": "Host/port on the General tab are resolved from inside the tunnel (e.g. 127.0.0.1:3306, as MySQL is seen from the SSH server's own machine).",
+    "paramName": "Name",
+    "paramValue": "Value",
+    "addParam": "Add parameter"
   }
 }

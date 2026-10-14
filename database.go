@@ -13,17 +13,22 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/ssh"
 )
 
 // ─── Data Types ──────────────────────────────────────────────────────────────
 
-// DBConnection is what the frontend sees: never carries a password.
+// DBConnection is what the frontend sees: never carries a password (MySQL's
+// or the SSH tunnel's). SSH tunnel fields and ExtraParams added 2026-10-14 —
+// see .specs/tasks/mysql-ssh-tunnel-and-connection-modal.md.
 type DBConnection struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -32,12 +37,27 @@ type DBConnection struct {
 	User     string `json:"user"`
 	Database string `json:"database"` // "" = not locked, browse all databases
 	Folder   string `json:"folder"`   // "" = ungrouped
+
+	// SSH tunnel: off by default. When on, the MySQL host/port above are
+	// resolved FROM INSIDE the tunnel (typically 127.0.0.1:3306 on the SSH
+	// server itself), not from the network BCode's own machine is on.
+	UseSSHTunnel bool   `json:"useSSHTunnel"`
+	SSHHost      string `json:"sshHost"`
+	SSHPort      int    `json:"sshPort"`
+	SSHUser      string `json:"sshUser"`
+
+	// DSN query-string parameters (go-sql-driver/mysql's own param names —
+	// NOT the MySQL Connector/J ones a JDBC-based client like DBeaver shows).
+	// Nil/empty on a connection saved before this field existed; callers
+	// needing a DSN fall back to the global default (effectiveExtraParams)
+	// rather than treating that as "no params at all" — see openConn.
+	ExtraParams map[string]string `json:"extraParams"`
 }
 
-// DBConnectionInput is what SaveDBConnection accepts. Password is plaintext
-// here only as a method parameter; it is encrypted before touching disk and
-// is never marshaled back to the frontend (see storedConnection below, which
-// is the on-disk shape).
+// DBConnectionInput is what SaveDBConnection accepts. Both passwords are
+// plaintext here only as method parameters; each is encrypted before
+// touching disk and is never marshaled back to the frontend (see
+// storedConnection below, which is the on-disk shape).
 type DBConnectionInput struct {
 	ID       string `json:"id"` // empty on create
 	Name     string `json:"name"`
@@ -47,13 +67,22 @@ type DBConnectionInput struct {
 	Password string `json:"password"` // "" on edit = keep existing password
 	Database string `json:"database"`
 	Folder   string `json:"folder"`
+
+	UseSSHTunnel bool   `json:"useSSHTunnel"`
+	SSHHost      string `json:"sshHost"`
+	SSHPort      int    `json:"sshPort"`
+	SSHUser      string `json:"sshUser"`
+	SSHPassword  string `json:"sshPassword"` // "" on edit = keep existing SSH password
+
+	ExtraParams map[string]string `json:"extraParams"`
 }
 
 // storedConnection is the on-disk shape in connections.json — same as
-// DBConnection plus the encrypted password. Never sent to the frontend as-is.
+// DBConnection plus the encrypted passwords. Never sent to the frontend as-is.
 type storedConnection struct {
 	DBConnection
-	PasswordEnc string `json:"passwordEnc"`
+	PasswordEnc    string `json:"passwordEnc"`
+	SSHPasswordEnc string `json:"sshPasswordEnc"`
 }
 
 type ColumnInfo struct {
@@ -179,6 +208,10 @@ func connectionsPath() string {
 	return filepath.Join(dbDir(), "connections.json")
 }
 
+func defaultExtraParamsPath() string {
+	return filepath.Join(dbDir(), "default_extra_params.json")
+}
+
 func dbKeyPath() string {
 	return filepath.Join(dbDir(), "key")
 }
@@ -295,6 +328,72 @@ func writeStoredConnections(list []storedConnection) error {
 	return os.WriteFile(connectionsPath(), data, 0644)
 }
 
+// seedExtraParams is the one-time starting point for the global default
+// (first launch, no default_extra_params.json yet) — this exact value was
+// hardcoded directly into openConn's DSN before this task, so a fresh
+// install's default behavior doesn't change.
+func seedExtraParams() map[string]string {
+	return map[string]string{"parseTime": "true"}
+}
+
+// loadDefaultExtraParams returns the saved global default, or the seed if
+// the file doesn't exist yet (nothing saved it there so far).
+func loadDefaultExtraParams() map[string]string {
+	data, err := os.ReadFile(defaultExtraParamsPath())
+	if err != nil {
+		return seedExtraParams()
+	}
+	m := map[string]string{}
+	if err := json.Unmarshal(data, &m); err != nil || m == nil {
+		return seedExtraParams()
+	}
+	return m
+}
+
+func saveDefaultExtraParams(m map[string]string) error {
+	if err := os.MkdirAll(dbDir(), 0755); err != nil {
+		return err
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(defaultExtraParamsPath(), data, 0644)
+}
+
+// effectiveExtraParams: a connection saved before this field existed has a
+// nil/empty map — treated as "use the global default", not as "no params at
+// all" (which would silently drop the parseTime=true every connection relied
+// on before this task). Only applies to resolving what to actually use (DSN
+// building, pre-filling the edit form); never written back to the
+// connection's own stored value just for being read.
+func effectiveExtraParams(m map[string]string) map[string]string {
+	if len(m) == 0 {
+		return loadDefaultExtraParams()
+	}
+	return m
+}
+
+func sameExtraParams(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// GetDefaultExtraParams returns the current global default — used to
+// pre-fill the Extra Params tab when creating a NEW connection. Editing an
+// existing connection pre-fills from its own saved ExtraParams instead (see
+// effectiveExtraParams), not this.
+func (a *App) GetDefaultExtraParams() map[string]string {
+	return loadDefaultExtraParams()
+}
+
 // ListDBConnections never includes a password field.
 func (a *App) ListDBConnections() []DBConnection {
 	stored := readStoredConnections()
@@ -315,49 +414,71 @@ func (a *App) SaveDBConnection(input DBConnectionInput) (string, error) {
 		input.ID = fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 
-	encPassword := ""
+	buildConn := func(passwordEnc, sshPasswordEnc string) storedConnection {
+		return storedConnection{
+			DBConnection: DBConnection{
+				ID: input.ID, Name: input.Name, Host: input.Host,
+				Port: input.Port, User: input.User, Database: input.Database,
+				Folder:       input.Folder,
+				UseSSHTunnel: input.UseSSHTunnel, SSHHost: input.SSHHost,
+				SSHPort: input.SSHPort, SSHUser: input.SSHUser,
+				ExtraParams: input.ExtraParams,
+			},
+			PasswordEnc:    passwordEnc,
+			SSHPasswordEnc: sshPasswordEnc,
+		}
+	}
+
 	found := false
 	for i, s := range list {
-		if s.ID == input.ID {
-			found = true
-			if input.Password == "" {
-				encPassword = s.PasswordEnc // keep existing
-			} else {
-				enc, err := encryptPassword(input.Password)
-				if err != nil {
-					return "", err
-				}
-				encPassword = enc
-			}
-			list[i] = storedConnection{
-				DBConnection: DBConnection{
-					ID: input.ID, Name: input.Name, Host: input.Host,
-					Port: input.Port, User: input.User, Database: input.Database,
-					Folder: input.Folder,
-				},
-				PasswordEnc: encPassword,
-			}
-			break
+		if s.ID != input.ID {
+			continue
 		}
+		found = true
+		encPassword := s.PasswordEnc // keep existing unless a new one is given
+		if input.Password != "" {
+			enc, err := encryptPassword(input.Password)
+			if err != nil {
+				return "", err
+			}
+			encPassword = enc
+		}
+		encSSHPassword := s.SSHPasswordEnc
+		if input.SSHPassword != "" {
+			enc, err := encryptPassword(input.SSHPassword)
+			if err != nil {
+				return "", err
+			}
+			encSSHPassword = enc
+		}
+		list[i] = buildConn(encPassword, encSSHPassword)
+		break
 	}
 	if !found {
 		enc, err := encryptPassword(input.Password)
 		if err != nil {
 			return "", err
 		}
-		list = append(list, storedConnection{
-			DBConnection: DBConnection{
-				ID: input.ID, Name: input.Name, Host: input.Host,
-				Port: input.Port, User: input.User, Database: input.Database,
-				Folder: input.Folder,
-			},
-			PasswordEnc: enc,
-		})
+		sshEnc, err := encryptPassword(input.SSHPassword)
+		if err != nil {
+			return "", err
+		}
+		list = append(list, buildConn(enc, sshEnc))
 	}
 
 	if err := writeStoredConnections(list); err != nil {
 		return "", err
 	}
+
+	// Last-write-wins: whatever Extra Params the user actually saved (on any
+	// connection, new or edited) become the pre-fill for the NEXT new
+	// connection — not retroactive to other already-saved connections.
+	if len(input.ExtraParams) > 0 && !sameExtraParams(input.ExtraParams, loadDefaultExtraParams()) {
+		if err := saveDefaultExtraParams(input.ExtraParams); err != nil {
+			return "", err
+		}
+	}
+
 	return input.ID, nil
 }
 
@@ -381,6 +502,100 @@ func findStoredConnection(id string) (storedConnection, error) {
 	return storedConnection{}, fmt.Errorf("connection %s not found", id)
 }
 
+// ─── SSH tunnel ──────────────────────────────────────────────────────────────
+// Password auth only for now (no private key) — confirmed with the user,
+// .specs/tasks/mysql-ssh-tunnel-and-connection-modal.md. Host key is not
+// verified (ssh.InsecureIgnoreHostKey()), also an explicit, documented
+// out-of-scope decision for this version, not an oversight.
+
+// sshClosingConn closes its SSH client along with the forwarded connection —
+// each dial below opens a fresh *ssh.Client (see sshTunnelDialFunc), so
+// nothing else would ever close it otherwise.
+type sshClosingConn struct {
+	net.Conn
+	sshClient *ssh.Client
+}
+
+func (c *sshClosingConn) Close() error {
+	connErr := c.Conn.Close()
+	sshErr := c.sshClient.Close()
+	if connErr != nil {
+		return connErr
+	}
+	return sshErr
+}
+
+// sshTunnelDialFunc returns a go-sql-driver/mysql DialContextFunc that routes
+// through an SSH tunnel to sc's SSH host instead of dialing addr directly.
+// Opens a brand new SSH connection per dial rather than sharing/pooling one
+// — simpler than coordinating a shared *ssh.Client's lifetime with
+// *sql.DB.Close() (this app always does db, _, err := openConn(...); defer
+// db.Close() right after use, never a long-lived pool, so the extra
+// handshake cost per use is not a real concern here).
+func sshTunnelDialFunc(sc storedConnection) mysql.DialContextFunc {
+	return func(ctx context.Context, addr string) (net.Conn, error) {
+		sshPassword, err := decryptPassword(sc.SSHPasswordEnc)
+		if err != nil {
+			return nil, fmt.Errorf("ssh tunnel: could not decrypt stored password: %w", err)
+		}
+		config := &ssh.ClientConfig{
+			User:            sc.SSHUser,
+			Auth:            []ssh.AuthMethod{ssh.Password(sshPassword)},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Timeout:         10 * time.Second,
+		}
+		sshAddr := fmt.Sprintf("%s:%d", sc.SSHHost, sc.SSHPort)
+		dialer := &net.Dialer{Timeout: config.Timeout}
+		netConn, err := dialer.DialContext(ctx, "tcp", sshAddr)
+		if err != nil {
+			return nil, fmt.Errorf("ssh tunnel: could not reach %s: %w", sshAddr, err)
+		}
+		sshConn, chans, reqs, err := ssh.NewClientConn(netConn, sshAddr, config)
+		if err != nil {
+			netConn.Close()
+			return nil, fmt.Errorf("ssh tunnel: %w", err)
+		}
+		client := ssh.NewClient(sshConn, chans, reqs)
+		conn, err := client.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			client.Close()
+			return nil, fmt.Errorf("ssh tunnel: could not reach %s through the tunnel: %w", addr, err)
+		}
+		return &sshClosingConn{Conn: conn, sshClient: client}, nil
+	}
+}
+
+// sshTunnelNetwork is unique per connection so concurrent tunnels for
+// different connections never collide in go-sql-driver/mysql's global dial
+// registry (RegisterDialContext is keyed by network name, process-wide).
+func sshTunnelNetwork(connectionID string) string {
+	return "sshtunnel-" + connectionID
+}
+
+// buildDSN assembles a go-sql-driver/mysql DSN. network is "tcp" for a direct
+// connection, or a per-connection custom network name registered against an
+// SSH tunnel dialer (see dialSSHTunnel) when the connection uses one.
+// extraParams are go-sql-driver/mysql's own DSN parameter names (parseTime,
+// loc, charset, etc.) — NOT the MySQL Connector/J ones a JDBC client like
+// DBeaver shows, a different driver with a different parameter set entirely.
+// A connection saved before this field existed (nil/empty map) falls back to
+// the global default instead of silently dropping parseTime=true, which
+// every connection relied on before this was configurable.
+func buildDSN(network, user, password, host string, port int, database string, extraParams map[string]string) string {
+	dsn := fmt.Sprintf("%s:%s@%s(%s:%d)/%s", user, password, network, host, port, database)
+	params := effectiveExtraParams(extraParams)
+	if len(params) == 0 {
+		return dsn
+	}
+	q := url.Values{}
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	// url.Values.Encode() sorts by key — deterministic DSN, not load-bearing
+	// for correctness but makes the generated string reproducible/testable.
+	return dsn + "?" + q.Encode()
+}
+
 // openConn loads, decrypts and opens a connection. Caller must Close() the
 // returned *sql.DB. database, if non-empty, is selected via the DSN so
 // queries can use unqualified table names.
@@ -393,8 +608,12 @@ func openConn(id string, database string) (*sql.DB, storedConnection, error) {
 	if err != nil {
 		return nil, sc, fmt.Errorf("could not decrypt stored password: %w", err)
 	}
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
-		sc.User, password, sc.Host, sc.Port, database)
+	network := "tcp"
+	if sc.UseSSHTunnel {
+		network = sshTunnelNetwork(sc.ID)
+		mysql.RegisterDialContext(network, sshTunnelDialFunc(sc))
+	}
+	dsn := buildDSN(network, sc.User, password, sc.Host, sc.Port, database, sc.ExtraParams)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, sc, err

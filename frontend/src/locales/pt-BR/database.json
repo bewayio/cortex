@@ -134,5 +134,19 @@
       "created": "Criado em",
       "updated": "Atualizado em"
     }
+  },
+  "connectionModal": {
+    "tabGeneral": "Geral",
+    "tabSSH": "Túnel SSH",
+    "tabExtraParams": "Extra Params",
+    "useSSHTunnel": "Usar túnel SSH",
+    "sshHost": "Host do servidor SSH",
+    "sshPort": "Porta SSH",
+    "sshUser": "Usuário SSH",
+    "sshPassword": "Senha SSH",
+    "sshHint": "Host/porta do MySQL na aba Geral são resolvidos de dentro do túnel (ex: 127.0.0.1:3306, como o MySQL é visto da própria máquina do servidor SSH).",
+    "paramName": "Nome",
+    "paramValue": "Valor",
+    "addParam": "Adicionar parâmetro"
   }
 }

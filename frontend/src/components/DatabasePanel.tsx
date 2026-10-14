@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
   ChevronRight, Database as DatabaseIcon, Table2, Plus, Pencil, Trash2,
-  PlugZap, FileText, Folder, FolderPlus, FolderOpen, History, RefreshCw,
+  FileText, Folder, FolderPlus, FolderOpen, History, RefreshCw,
 } from 'lucide-react'
 import { Trans, useTranslation } from 'react-i18next'
 import { useEditorStore } from '../stores/editorStore'
 import { usePlatform } from '../utils/platform'
+import ConnectionModal, { ConnectionFormState, emptyConnectionForm } from './ConnectionModal'
 import {
   ListDBConnections, SaveDBConnection, DeleteDBConnection, TestDBConnection,
   ListDatabases, ListTables, ListSavedQueries, SaveQueryTab,
@@ -17,18 +18,8 @@ import { main } from '../../wailsjs/go/models'
 type DBConnection = main.DBConnection
 type SavedQuery = main.SavedQuery
 
-interface FormState {
-  id: string
-  name: string
-  host: string
-  port: string
-  user: string
-  password: string
-  database: string
-  folder: string
-}
-
-const emptyForm: FormState = { id: '', name: '', host: '', port: '3306', user: '', password: '', database: '', folder: '' }
+type FormState = ConnectionFormState
+const emptyForm: FormState = emptyConnectionForm
 
 type ItemKind = 'connection' | 'query'
 type RowKind = ItemKind | 'connection-folder' | 'query-folder'
@@ -355,18 +346,33 @@ export default function DatabasePanel({ actionRef }: Props) {
 
   const startCreate = () => { setForm({ ...emptyForm }); setTestMsg(null) }
   const startEdit = (c: DBConnection) => {
-    setForm({ id: c.id, name: c.name, host: c.host, port: String(c.port || 3306), user: c.user, password: '', database: c.database || '', folder: c.folder || '' })
+    setForm({
+      id: c.id, name: c.name, host: c.host, port: String(c.port || 3306), user: c.user, password: '',
+      database: c.database || '', folder: c.folder || '',
+      useSSHTunnel: c.useSSHTunnel || false,
+      sshHost: c.sshHost || '', sshPort: String(c.sshPort || 22), sshUser: c.sshUser || '', sshPassword: '',
+      extraParams: c.extraParams || {},
+    })
     setTestMsg(null)
   }
+
+  // Monta o payload do SaveDBConnection a partir do FormState — usado tanto
+  // pelo save de verdade quanto pelo "salva pra poder testar" de uma conexão
+  // nova (abaixo), que precisa dos mesmos campos.
+  const formToInput = (f: FormState, overrideName?: string) => ({
+    id: f.id, name: overrideName ?? f.name, host: f.host,
+    port: parseInt(f.port, 10) || 3306, user: f.user,
+    password: f.password, database: f.database, folder: f.folder,
+    useSSHTunnel: f.useSSHTunnel,
+    sshHost: f.sshHost, sshPort: parseInt(f.sshPort, 10) || 22, sshUser: f.sshUser,
+    sshPassword: f.sshPassword,
+    extraParams: f.extraParams,
+  })
 
   const saveForm = async () => {
     if (!form) return
     try {
-      await SaveDBConnection({
-        id: form.id, name: form.name, host: form.host,
-        port: parseInt(form.port, 10) || 3306, user: form.user,
-        password: form.password, database: form.database, folder: form.folder,
-      } as any)
+      await SaveDBConnection(formToInput(form) as any)
       setForm(null)
       setDatabasesByConn({})
       setTablesByDb({})
@@ -380,10 +386,7 @@ export default function DatabasePanel({ actionRef }: Props) {
     if (!form) return
     if (!form.id) {
       try {
-        const id = await SaveDBConnection({
-          name: form.name || '(test)', host: form.host, port: parseInt(form.port, 10) || 3306,
-          user: form.user, password: form.password, database: form.database, folder: form.folder,
-        } as any)
+        const id = await SaveDBConnection(formToInput(form, form.name || '(test)') as any)
         await TestDBConnection(id)
         setTestMsg({ id, ok: true, msg: t('panel.connectedSuccessfully') })
         setForm({ ...form, id })
@@ -746,48 +749,6 @@ export default function DatabasePanel({ actionRef }: Props) {
                 </div>
               )}
 
-              {form && (
-                <div className="cc-settings db-conn-form">
-                  <div className="cc-settings-row">
-                    <input className="cc-settings-input" placeholder={t('panel.form.name')} value={form.name}
-                      onChange={e => setForm({ ...form, name: e.target.value })} autoFocus />
-                  </div>
-                  <div className="cc-settings-row">
-                    <input className="cc-settings-input" placeholder={t('panel.form.host')} value={form.host}
-                      onChange={e => setForm({ ...form, host: e.target.value })} style={{ flex: 2 }} />
-                    <input className="cc-settings-input" placeholder={t('panel.form.port')} value={form.port}
-                      onChange={e => setForm({ ...form, port: e.target.value })} style={{ flex: 1 }} />
-                  </div>
-                  <div className="cc-settings-row">
-                    <input className="cc-settings-input" placeholder={t('panel.form.user')} value={form.user}
-                      onChange={e => setForm({ ...form, user: e.target.value })} />
-                  </div>
-                  <div className="cc-settings-row">
-                    <input className="cc-settings-input" type="password"
-                      placeholder={form.id ? t('panel.form.passwordKeepCurrent') : t('panel.form.password')}
-                      value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
-                  </div>
-                  <div className="cc-settings-row">
-                    <input className="cc-settings-input" placeholder={t('panel.form.databaseOptional')}
-                      value={form.database} onChange={e => setForm({ ...form, database: e.target.value })} />
-                  </div>
-                  <div className="cc-settings-row">
-                    <select className="query-select db-form-select" value={form.folder} onChange={e => setForm({ ...form, folder: e.target.value })}>
-                      <option value="">{t('panel.noFolder')}</option>
-                      {connectionFolders.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                  </div>
-                  {testMsg && (form.id === testMsg.id || (!form.id && testMsg.id === 'new')) && (
-                    <div className={`db-test-msg ${testMsg.ok ? 'ok' : 'err'}`}>{testMsg.msg}</div>
-                  )}
-                  <div className="cc-settings-actions">
-                    <button className="cc-settings-save" onClick={saveForm}>{t('common:save')}</button>
-                    <button className="cc-settings-cancel" onClick={testForm}><PlugZap size={11} /> {t('panel.test')}</button>
-                    <button className="cc-settings-cancel" onClick={() => setForm(null)}>{t('common:cancel')}</button>
-                  </div>
-                </div>
-              )}
-
               {connections.length === 0 && !form && (
                 <div className="no-workspace-text" style={{ padding: 16 }}>
                   {t('panel.noConnectionsYet')}
@@ -883,6 +844,15 @@ export default function DatabasePanel({ actionRef }: Props) {
               <div className="context-menu-item" onClick={() => {
                 const conn = connections.find(c => c.id === ctxMenu.id)
                 setCtxMenu(null)
+                if (conn) startEdit(conn)
+              }}>
+                <Pencil size={13} /> {t('panel.edit')}
+              </div>
+            )}
+            {ctxMenu.kind === 'connection' && (
+              <div className="context-menu-item" onClick={() => {
+                const conn = connections.find(c => c.id === ctxMenu.id)
+                setCtxMenu(null)
                 if (conn) reconnectConnection(conn)
               }}>
                 <RefreshCw size={13} /> {t('panel.reconnect')}
@@ -929,6 +899,18 @@ export default function DatabasePanel({ actionRef }: Props) {
             </div>
           </div>
         </>
+      )}
+
+      {form && (
+        <ConnectionModal
+          form={form}
+          onChange={setForm}
+          connectionFolders={connectionFolders}
+          testMsg={testMsg}
+          onSave={saveForm}
+          onTest={testForm}
+          onClose={() => setForm(null)}
+        />
       )}
     </div>
   )
