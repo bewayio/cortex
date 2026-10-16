@@ -20,11 +20,13 @@
     "explorer": "Explorer (⌘+Shift+E)",
     "sourceControl": "Source Control",
     "database": "Database",
-    "toggleTerminal": "Toggle Terminal (Ctrl+`)"
+    "toggleTerminal": "Toggle Terminal (Ctrl+`)",
+    "aiSessions": "AI Sessions"
   },
   "sidebar": {
     "explorer": "EXPLORER",
     "sourceControl": "SOURCE CONTROL",
+    "aiSessions": "AI SESSIONS",
     "newFile": "New File",
     "newFolder": "New Folder",
     "collapseAll": "Collapse All",

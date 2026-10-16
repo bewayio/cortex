@@ -20,11 +20,13 @@
     "explorer": "Explorador (⌘+Shift+E)",
     "sourceControl": "Control de Versiones",
     "database": "Base de Datos",
-    "toggleTerminal": "Alternar Terminal (Ctrl+`)"
+    "toggleTerminal": "Alternar Terminal (Ctrl+`)",
+    "aiSessions": "AI Sessions"
   },
   "sidebar": {
     "explorer": "EXPLORADOR",
     "sourceControl": "CONTROL DE VERSIONES",
+    "aiSessions": "AI SESSIONS",
     "newFile": "Nuevo Archivo",
     "newFolder": "Nueva Carpeta",
     "collapseAll": "Contraer Todo",

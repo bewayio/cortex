@@ -5,9 +5,10 @@ import WorkspaceList from './WorkspaceList'
 import FileExplorer, { FileExplorerHandle } from './FileExplorer'
 import GitPanel from './GitPanel'
 import DatabasePanel, { DatabasePanelHandle } from './DatabasePanel'
+import AiSessionsPanel from './AiSessionsPanel'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 
-type Panel = 'explorer' | 'git' | 'database'
+type Panel = 'explorer' | 'git' | 'database' | 'aiSessions'
 
 interface Props {
   activePanel: Panel
@@ -17,9 +18,10 @@ interface Props {
   // dependendo de qual painel está ativo.
   explorerActionsRef: React.MutableRefObject<FileExplorerHandle | null>
   dbActionsRef: React.MutableRefObject<DatabasePanelHandle | null>
+  onOpenSessionTerminal: (command: string) => void
 }
 
-export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsRef, dbActionsRef }: Props) {
+export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsRef, dbActionsRef, onOpenSessionTerminal }: Props) {
   const { t } = useTranslation('shell')
   const { currentWorkspace } = useWorkspaceStore()
 
@@ -33,6 +35,10 @@ export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsR
     )
   }
 
+  const panelTitle = activePanel === 'explorer' ? t('sidebar.explorer')
+    : activePanel === 'git' ? t('sidebar.sourceControl')
+    : t('sidebar.aiSessions')
+
   return (
     <div className="sidebar-inner">
       <div className="sidebar-workspace-section">
@@ -43,7 +49,7 @@ export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsR
 
       {/* Cabeçalho do painel com botões de ação à direita */}
       <div className="sidebar-panel-header">
-        <span>{activePanel === 'explorer' ? t('sidebar.explorer') : t('sidebar.sourceControl')}</span>
+        <span>{panelTitle}</span>
         {activePanel === 'explorer' && currentWorkspace && (
           <div className="sidebar-header-actions">
             <button
@@ -80,8 +86,10 @@ export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsR
               <div className="no-workspace-text">{t('sidebar.openFolderToStart')}</div>
             </div>
           )
-        ) : (
+        ) : activePanel === 'git' ? (
           <GitPanel />
+        ) : (
+          <AiSessionsPanel onOpenSessionTerminal={onOpenSessionTerminal} />
         )}
       </div>
     </div>

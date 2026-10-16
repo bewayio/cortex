@@ -10,6 +10,7 @@ import ptBRDatabase from './locales/pt-BR/database.json'
 import ptBRTerminal from './locales/pt-BR/terminal.json'
 import ptBRUsage from './locales/pt-BR/usage.json'
 import ptBRCommandPalette from './locales/pt-BR/commandPalette.json'
+import ptBRAiSessions from './locales/pt-BR/aiSessions.json'
 import esCommon from './locales/es/common.json'
 import esShell from './locales/es/shell.json'
 import esEditor from './locales/es/editor.json'
@@ -19,6 +20,7 @@ import esDatabase from './locales/es/database.json'
 import esTerminal from './locales/es/terminal.json'
 import esUsage from './locales/es/usage.json'
 import esCommandPalette from './locales/es/commandPalette.json'
+import esAiSessions from './locales/es/aiSessions.json'
 import enUSCommon from './locales/en-US/common.json'
 import enUSShell from './locales/en-US/shell.json'
 import enUSEditor from './locales/en-US/editor.json'
@@ -28,6 +30,7 @@ import enUSDatabase from './locales/en-US/database.json'
 import enUSTerminal from './locales/en-US/terminal.json'
 import enUSUsage from './locales/en-US/usage.json'
 import enUSCommandPalette from './locales/en-US/commandPalette.json'
+import enUSAiSessions from './locales/en-US/aiSessions.json'
 
 export type SupportedLanguage = 'pt-BR' | 'es' | 'en-US'
 export const SUPPORTED_LANGUAGES: SupportedLanguage[] = ['pt-BR', 'es', 'en-US']
@@ -62,13 +65,13 @@ export function getCurrentLanguage(): SupportedLanguage {
 
 i18n.use(initReactI18next).init({
   resources: {
-    'pt-BR': { common: ptBRCommon, shell: ptBRShell, editor: ptBREditor, explorer: ptBRExplorer, git: ptBRGit, database: ptBRDatabase, terminal: ptBRTerminal, usage: ptBRUsage, commandPalette: ptBRCommandPalette },
-    es: { common: esCommon, shell: esShell, editor: esEditor, explorer: esExplorer, git: esGit, database: esDatabase, terminal: esTerminal, usage: esUsage, commandPalette: esCommandPalette },
-    'en-US': { common: enUSCommon, shell: enUSShell, editor: enUSEditor, explorer: enUSExplorer, git: enUSGit, database: enUSDatabase, terminal: enUSTerminal, usage: enUSUsage, commandPalette: enUSCommandPalette },
+    'pt-BR': { common: ptBRCommon, shell: ptBRShell, editor: ptBREditor, explorer: ptBRExplorer, git: ptBRGit, database: ptBRDatabase, terminal: ptBRTerminal, usage: ptBRUsage, commandPalette: ptBRCommandPalette, aiSessions: ptBRAiSessions },
+    es: { common: esCommon, shell: esShell, editor: esEditor, explorer: esExplorer, git: esGit, database: esDatabase, terminal: esTerminal, usage: esUsage, commandPalette: esCommandPalette, aiSessions: esAiSessions },
+    'en-US': { common: enUSCommon, shell: enUSShell, editor: enUSEditor, explorer: enUSExplorer, git: enUSGit, database: enUSDatabase, terminal: enUSTerminal, usage: enUSUsage, commandPalette: enUSCommandPalette, aiSessions: enUSAiSessions },
   },
   lng: detectLanguage(),
   fallbackLng: 'en-US',
-  ns: ['common', 'shell', 'editor', 'explorer', 'git', 'database', 'terminal', 'usage', 'commandPalette'],
+  ns: ['common', 'shell', 'editor', 'explorer', 'git', 'database', 'terminal', 'usage', 'commandPalette', 'aiSessions'],
   defaultNS: 'common',
   interpolation: { escapeValue: false },
 })

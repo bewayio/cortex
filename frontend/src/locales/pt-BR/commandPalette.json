@@ -9,6 +9,7 @@
     "toggleExplorer": "Alternar Painel do Explorer",
     "toggleGit": "Alternar Painel do Git",
     "toggleDatabase": "Alternar Painel do Banco de Dados",
+    "toggleAiSessions": "Alternar Painel de AI Sessions",
     "goHome": "Ir para Home",
     "closeTab": "Fechar Aba",
     "closeAllTabs": "Fechar Todas as Abas"

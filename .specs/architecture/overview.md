@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: architecture
-last_updated: 2026-09-27
-version: 1
+last_updated: 2026-10-16
+version: 3
 connections:
   parent: .specs/project/project-dna.md
   children:
@@ -58,6 +58,7 @@ Logical modules. Backend code lives in `app.go` (`planned`: split into one file 
 | usage | Claude Code token usage from local session logs | nothing persisted, reads `~/.claude/projects` | `GetClaudeTokenUsage` |
 | database | MySQL client: connections, tree, query tabs | `~/.bcode/db/`, `~/.bcode/queries/` | `ListDBConnections`, `SaveDBConnection`, `DeleteDBConnection`, `TestDBConnection`, `ListDatabases`, `ListTables`, `DescribeTable`, `RunQuery`, `ListSavedQueries`, `SaveQueryTab`, `DeleteQueryTab` |
 | release (`planned`) | Build and publish desktop binaries via CI | `.github/workflows/release.yml`, the rolling release on `bewayio/bcode` | N/A — GitHub Actions pipeline, not a runtime API |
+| ai-sessions | Discover and resume Claude Code/Codex CLI sessions, grouped by project | nothing persisted, reads `~/.claude/sessions`+`~/.claude/projects` and speaks Codex's `app-server` JSON-RPC | `ListClaudeSessions`, `ListCodexSessions`, `DeleteClaudeSession`, `DeleteCodexSession` |
 
 ## Communication
 

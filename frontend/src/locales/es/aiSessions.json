@@ -1,0 +1,14 @@
+{
+  "title": "AI Sessions",
+  "openProjectToSee": "Abre un proyecto para ver sus sesiones.",
+  "loading": "Cargando…",
+  "noSessions": "No se encontraron sesiones para este proyecto.",
+  "running": "Ejecutándose ahora",
+  "createdLabel": "Creada",
+  "updatedLabel": "Editada",
+  "open": "Abrir",
+  "delete": "Eliminar",
+  "loadMore": "Cargar más",
+  "deleteConfirmTitle": "Eliminar sesión",
+  "deleteConfirmMsg": "¿Eliminar \"{{title}}\"? Esto elimina el registro, pero no detiene el proceso si todavía está corriendo en otro lugar."
+}

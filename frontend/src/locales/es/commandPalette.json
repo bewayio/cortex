@@ -9,6 +9,7 @@
     "toggleExplorer": "Alternar Panel del Explorador",
     "toggleGit": "Alternar Panel de Git",
     "toggleDatabase": "Alternar Panel de Base de Datos",
+    "toggleAiSessions": "Alternar Panel de AI Sessions",
     "goHome": "Ir a Inicio",
     "closeTab": "Cerrar Pestaña",
     "closeAllTabs": "Cerrar Todas las Pestañas"

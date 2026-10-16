@@ -95,6 +95,15 @@ interface WsSnapshot {
   activeRightId: string | null
 }
 
+export interface TerminalHandle {
+  // Abre um terminal novo já "digitando" o comando (ex: `claude --resume
+  // <id>`) assim que o shell sobe — usado pela aba AI Sessions pra retomar
+  // uma sessão. Não é um parâmetro de StartTerminal (que só abre um shell em
+  // branco): equivale a chamar TerminalInput logo depois do terminal existir,
+  // como se o usuário tivesse digitado e apertado Enter.
+  openWithCommand: (command: string, dock?: Dock) => void
+}
+
 interface Props {
   // Nó DOM onde o painel de cada dock é portado (ver App.tsx) — null enquanto
   // o container ainda não montou, ou quando o dock está colapsado (vazio).
@@ -113,11 +122,15 @@ interface Props {
   // Enquanto true, o chamador mantém ambos os containers visíveis (mesmo o
   // dock vazio) como zona de soltura durante um arrasto entre docks.
   onDraggingChange?: (dragging: boolean) => void
+  // Mesmo padrão de FileExplorerHandle/DatabasePanelHandle — ações expostas
+  // ao pai (App.tsx) pra serem acionadas de fora (AiSessionsTab.tsx).
+  actionRef?: React.MutableRefObject<TerminalHandle | null>
 }
 
 export default function Terminal({
   bottomContainer, rightContainer, bottomHeight, rightWidth, visible,
   workspaceId, workdir, initialCount = 1, onTabCountChange, onAllClosed, onDraggingChange,
+  actionRef,
 }: Props) {
   const { t } = useTranslation('terminal')
   const platform = usePlatform()
@@ -499,7 +512,10 @@ export default function Terminal({
   }, [visible, workspaceId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Adicionar terminal ────────────────────────────────────────────────────
-  const addTerminalTab = async (dock: Dock) => {
+  // startupCommand (opcional): "digita" esse comando no shell assim que ele
+  // sobe, como se o usuário tivesse acabado de teclar e dado Enter — usado
+  // pelo openWithCommand do actionRef (abaixo), não pelo botão "+" normal.
+  const addTerminalTab = async (dock: Dock, startupCommand?: string) => {
     const tab = await createTerminal(dock)
     if (!tab) return
     const next = [...tabsRef.current, tab]
@@ -508,7 +524,16 @@ export default function Terminal({
     else setActiveRightId(tab.id)
     reportCounts(next)
     showOnlyInDock(dock, tab.id, next)
+    if (startupCommand) TerminalInput(tab.id, startupCommand + '\n').catch(console.error)
   }
+
+  // ── Expõe ações ao pai via actionRef — mesmo padrão de FileExplorerHandle ──
+  useEffect(() => {
+    if (!actionRef) return
+    actionRef.current = {
+      openWithCommand: (command, dock = 'bottom') => { addTerminalTab(dock, command) },
+    }
+  })
 
   // ── Fecha aba ─────────────────────────────────────────────────────────────
   const closeTab = async (id: string) => {

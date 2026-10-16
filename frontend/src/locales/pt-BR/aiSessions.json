@@ -1,0 +1,14 @@
+{
+  "title": "AI Sessions",
+  "openProjectToSee": "Abra um projeto para ver suas sessões.",
+  "loading": "Carregando…",
+  "noSessions": "Nenhuma sessão encontrada para este projeto.",
+  "running": "Rodando agora",
+  "createdLabel": "Criada",
+  "updatedLabel": "Editada",
+  "open": "Abrir",
+  "delete": "Excluir",
+  "loadMore": "Carregar mais",
+  "deleteConfirmTitle": "Excluir sessão",
+  "deleteConfirmMsg": "Excluir \"{{title}}\"? Isso remove o registro, mas não encerra o processo se ele ainda estiver rodando em outro lugar."
+}

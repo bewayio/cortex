@@ -1,0 +1,14 @@
+{
+  "title": "AI Sessions",
+  "openProjectToSee": "Open a project to see its sessions.",
+  "loading": "Loading…",
+  "noSessions": "No sessions found for this project.",
+  "running": "Running now",
+  "createdLabel": "Created",
+  "updatedLabel": "Edited",
+  "open": "Open",
+  "delete": "Delete",
+  "loadMore": "Load more",
+  "deleteConfirmTitle": "Delete session",
+  "deleteConfirmMsg": "Delete \"{{title}}\"? This removes the record, but doesn't stop the process if it's still running elsewhere."
+}

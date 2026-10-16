@@ -1,9 +1,9 @@
 import React from 'react'
-import { FolderOpen, GitBranch, Terminal, Database } from 'lucide-react'
+import { FolderOpen, GitBranch, Terminal, Database, Bot } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useGitStore } from '../stores/gitStore'
 
-type Panel = 'explorer' | 'git' | 'database'
+type Panel = 'explorer' | 'git' | 'database' | 'aiSessions'
 
 interface Props {
   activePanel: Panel
@@ -17,6 +17,14 @@ export default function ActivityBar({ activePanel, onPanelChange, onToggleTermin
 
   return (
     <div className="activity-bar">
+      <button
+        className={`activity-bar-btn ${activePanel === 'aiSessions' ? 'active' : ''}`}
+        title={t('activityBar.aiSessions')}
+        onClick={() => onPanelChange('aiSessions')}
+      >
+        <Bot size={20} />
+      </button>
+
       <button
         className={`activity-bar-btn ${activePanel === 'explorer' ? 'active' : ''}`}
         title={t('activityBar.explorer')}

@@ -11,7 +11,7 @@ export interface CommandContext {
   onNewQuery: () => void
   onOpenFolder: () => void
   onGoToFile: () => void
-  onTogglePanel: (panel: 'explorer' | 'git' | 'database') => void
+  onTogglePanel: (panel: 'explorer' | 'git' | 'database' | 'aiSessions') => void
   onGoHome: () => void
   onCloseTab: () => void
   onCloseAllTabs: () => void
@@ -29,6 +29,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
     { id: 'toggle-explorer', label: t('commandPalette:commands.toggleExplorer'), run: () => ctx.onTogglePanel('explorer') },
     { id: 'toggle-git', label: t('commandPalette:commands.toggleGit'), run: () => ctx.onTogglePanel('git') },
     { id: 'toggle-database', label: t('commandPalette:commands.toggleDatabase'), run: () => ctx.onTogglePanel('database') },
+    { id: 'toggle-ai-sessions', label: t('commandPalette:commands.toggleAiSessions'), run: () => ctx.onTogglePanel('aiSessions') },
     { id: 'go-home', label: t('commandPalette:commands.goHome'), run: ctx.onGoHome },
     { id: 'close-tab', label: t('commandPalette:commands.closeTab'), run: ctx.onCloseTab },
     { id: 'close-all-tabs', label: t('commandPalette:commands.closeAllTabs'), run: ctx.onCloseAllTabs },

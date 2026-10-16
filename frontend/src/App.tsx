@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar'
 import { FileExplorerHandle } from './components/FileExplorer'
 import { DatabasePanelHandle } from './components/DatabasePanel'
 import EditorPane from './components/EditorPane'
-import Terminal from './components/Terminal'
+import Terminal, { TerminalHandle } from './components/Terminal'
 import StatusBar from './components/StatusBar'
 import TitleBar from './components/TitleBar'
 import { useWorkspaceStore } from './stores/workspaceStore'
@@ -42,7 +42,7 @@ import {
 import { buildCommands } from './utils/commands'
 import { Workspace, EditorTab, ViewMode } from './types'
 
-type Panel = 'explorer' | 'git' | 'database'
+type Panel = 'explorer' | 'git' | 'database' | 'aiSessions'
 
 function lsInt(key: string, def: number) {
   const v = localStorage.getItem(key)
@@ -98,6 +98,9 @@ export default function App() {
   // dependendo de qual painel está ativo.
   const explorerActionsRef = useRef<FileExplorerHandle | null>(null)
   const dbActionsRef = useRef<DatabasePanelHandle | null>(null)
+  // Mesmo motivo — AiSessionsPanel.tsx precisa abrir um terminal novo já
+  // rodando um comando (resume de sessão) de fora do componente Terminal.
+  const terminalActionsRef = useRef<TerminalHandle | null>(null)
 
   // ── Carrega os tabs de um workspace do disco ──────────────────────────────
   const loadTabsFromDisk = useCallback(async (ws: Workspace) => {
@@ -316,6 +319,29 @@ export default function App() {
 
   // Monta o terminal na primeira vez que for aberto
   useEffect(() => { if (showTerminal && !terminalMounted) setTerminalMounted(true) }, [showTerminal]) // eslint-disable-line
+
+  // AiSessionsPanel.tsx pede um terminal novo já rodando um comando de resume
+  // (ver Terminal.tsx's TerminalHandle). Se o terminal já está montado, só
+  // chama direto; senão, guarda o comando e dispara o mount (setShowTerminal),
+  // consumido pelo efeito logo abaixo assim que `terminalMounted` vira true —
+  // só então o actionRef do Terminal (populado pelo próprio efeito dele, que
+  // roda antes deste por ser filho) existe de verdade.
+  const pendingTerminalCommandRef = useRef<string | null>(null)
+  const openSessionTerminal = useCallback((command: string) => {
+    if (terminalMounted) {
+      terminalActionsRef.current?.openWithCommand(command)
+    } else {
+      pendingTerminalCommandRef.current = command
+      setShowTerminal(true)
+    }
+  }, [terminalMounted])
+  useEffect(() => {
+    if (terminalMounted && pendingTerminalCommandRef.current) {
+      const cmd = pendingTerminalCommandRef.current
+      pendingTerminalCommandRef.current = null
+      terminalActionsRef.current?.openWithCommand(cmd)
+    }
+  }, [terminalMounted])
 
   // ── Salva ao fechar ───────────────────────────────────────────────────────
   // `beforeunload` não dá pra confiar: é fire-and-forget (não há como esperar
@@ -548,6 +574,7 @@ export default function App() {
               onOpenWorkspace={handleOpenWorkspace}
               explorerActionsRef={explorerActionsRef}
               dbActionsRef={dbActionsRef}
+              onOpenSessionTerminal={openSessionTerminal}
             />
             <div className="sidebar-resize-handle" onMouseDown={handleSidebarResize} />
           </div>
@@ -603,6 +630,7 @@ export default function App() {
           workdir={currentWorkspace?.path ?? '~'}
           initialCount={terminalInitialCount}
           onDraggingChange={setIsDraggingTerminal}
+          actionRef={terminalActionsRef}
           onTabCountChange={(dock, n) => {
             if (dock === 'bottom') setBottomTermCount(n)
             else setRightTermCount(n)
