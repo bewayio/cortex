@@ -22,6 +22,7 @@
   "shortcuts": {
     "nextTab": "Pestaña siguiente",
     "previousTab": "Pestaña anterior",
+    "switchProject": "Cambiar de proyecto",
     "goToFile": "Ir a archivo",
     "commandPalette": "Paleta de comandos",
     "lastUsedQuery": "Última query usada (enfoca si ya está abierta)",

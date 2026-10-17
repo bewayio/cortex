@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: modules
-last_updated: 2026-09-25
-version: 1
+last_updated: 2026-10-17
+version: 2
 connections:
   parent: .specs/architecture/overview.md
   children: []
@@ -67,3 +67,4 @@ None.
 - Codex CLI usage is explicitly out of scope for the first version (user decision, 2026-09-25): no `~/.codex` directory was available on the machine used to write this spec, so its log format is unverified. A future task must confirm the format on a machine that has it before adding Codex support here.
 - Frontend: `components/UsageTab.tsx` (chart + grouping toggle) and reused `WorkspaceList.tsx` (recent projects), rendered as an editor tab per `modules/shell.md`. `UsagePanel.tsx` (the sidebar version) was deleted, not kept alongside.
 - Shipped 2026-09-26: this is now the "Home" tab, first `ActivityBar` icon (`Home` icon from lucide-react). Internal identifiers (`isUsageTab`, the `UsageTab.tsx` filename, the `openUsageTab`-style function names) were kept as-is — only the user-visible label/position changed, to avoid unnecessary churn. Task: `.specs/tasks/home-icon-and-closed-projects.md`.
+- **Implementado 2026-10-17, pedido do usuário** — a lista de atalhos da Home (`SHORTCUTS` em `UsageTab.tsx`) não incluía o atalho de trocar de projeto (Ctrl/Cmd+↑/↓, já implementado — ver `.specs/modules/shell.md`). Gap de documentação na UI, sem mudança de comportamento. Nova entrada `{ combo: 'Mod+↑/↓', descKey: 'switchProject' }`, posicionada logo depois de `previousTab`; chave `shortcuts.switchProject` traduzida nos três idiomas. Task: `.specs/tasks/home-project-switcher-shortcut-hint.md`.

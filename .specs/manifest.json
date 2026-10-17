@@ -34,6 +34,8 @@
       ".specs/adrs/0009-mysql-client.md"
     ],
     "tasks": [
+      ".specs/tasks/file-open-infinite-loading.md",
+      ".specs/tasks/file-open-infinite-loading-plan.md",
       ".specs/tasks/home-icon-and-closed-projects.md",
       ".specs/tasks/initial-setup.md",
       ".specs/tasks/mysql-query-tabs.md",

@@ -1274,6 +1274,31 @@ func parseDiff(raw string) []FileDiff {
 
 // ─── Terminal ─────────────────────────────────────────────────────────────────
 
+// appImageEnvVars are runtime variables the Linux AppImage launcher injects into
+// this process's environment (AppRun). They leak into every child process via
+// os.Environ(), including LD_LIBRARY_PATH pointing at the AppImage's own bundled
+// libs — breaking any build tool (go, gcc, npm) run inside the integrated terminal
+// when it links against the host's newer system libraries instead. Stripped here
+// so a terminal opened inside Cortex behaves like a normal host terminal.
+var appImageEnvVars = []string{"LD_LIBRARY_PATH", "APPDIR", "APPIMAGE", "OWD", "ARGV0"}
+
+func terminalEnv() []string {
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, kv := range os.Environ() {
+		skip := false
+		for _, name := range appImageEnvVars {
+			if strings.HasPrefix(kv, name+"=") {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			env = append(env, kv)
+		}
+	}
+	return append(env, "TERM=xterm-256color")
+}
+
 func (a *App) StartTerminal(workdir string) (string, error) {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
@@ -1284,7 +1309,7 @@ func (a *App) StartTerminal(workdir string) (string, error) {
 
 	cmd := exec.CommandContext(ctx, shell)
 	cmd.Dir = workdir
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	cmd.Env = terminalEnv()
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {

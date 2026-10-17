@@ -671,6 +671,7 @@
 .file-tree-item {
   display: flex;
   align-items: center;
+  gap: 4px;
   height: var(--row-height);
   cursor: pointer;
   transition: background 0.1s;
@@ -699,6 +700,7 @@
   justify-content: center;
   flex-shrink: 0;
   color: var(--fg-dim);
+  line-height: 0;
   transition: transform 0.15s;
 }
 
@@ -713,18 +715,20 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-right: 6px;
   line-height: 0;
 }
 
 .file-tree-item-name {
   font-size: 13px;
+  line-height: 16px;
   color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+  position: relative;
+  top: 2px;
 }
 
 /* ─── Tab Bar ─────────────────────────────────────────────────────────────── */

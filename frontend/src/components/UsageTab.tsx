@@ -84,6 +84,7 @@ function formatTokens(n: number): string {
 const SHORTCUTS: { combo: string; descKey: string }[] = [
   { combo: 'Mod+Tab', descKey: 'nextTab' },
   { combo: 'Mod+Shift+Tab', descKey: 'previousTab' },
+  { combo: 'Mod+↑/↓', descKey: 'switchProject' },
   { combo: 'Mod+P', descKey: 'goToFile' },
   { combo: 'Mod+Shift+P', descKey: 'commandPalette' },
   { combo: 'Mod+Q', descKey: 'lastUsedQuery' },

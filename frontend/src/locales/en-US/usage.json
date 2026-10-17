@@ -22,6 +22,7 @@
   "shortcuts": {
     "nextTab": "Next tab",
     "previousTab": "Previous tab",
+    "switchProject": "Switch project",
     "goToFile": "Go to file",
     "commandPalette": "Command palette",
     "lastUsedQuery": "Last used query (focus if already open)",

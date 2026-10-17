@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: modules
-last_updated: 2026-10-11
-version: 13
+last_updated: 2026-10-17
+version: 16
 connections:
   parent: .specs/architecture/overview.md
   children: []
@@ -120,4 +120,8 @@ None.
   - **Extra Params**: pares chave/valor anexados na DSN (`buildDSN`, `net/url.Values` — ordenados por chave), pré-preenchidos com um default global (`~/.bcode/db/default_extra_params.json`, seed `{"parseTime":"true"}` — migra o que já estava hardcoded) que se atualiza sozinho (`SaveDBConnection`) sempre que o usuário salva valores diferentes do default atual. Conexões sem Extra Params salvos (de antes desta task) resolvem pro default global na hora de montar a DSN (`effectiveExtraParams`), sem reescrever nada sozinho.
   - Verificado por `go build`/`vet`/`gofmt`, `tsc`/`vite build`, e dois testes Go descartáveis (DSN com network de túnel; falha rápida num SSH host inalcançável) — removidos depois de passar. **Não verificado**: conexão de verdade com túnel SSH/MySQL reais (sem servidor de teste disponível aqui) nem a UI interativa em `wails dev`.
   - Task: `.specs/tasks/mysql-ssh-tunnel-and-connection-modal.md`.
+- **Implementado 2026-10-17, pedido do usuário — espaçamento entre chevron/ícone/texto nas linhas de Conexões/Queries Salvas.** Print do usuário mostrando a pasta "LOCAL" (com contador) como referência. Mesmas classes CSS do `files` (`.file-tree-item*`, `.db-folder-row` estende, sem overrides próprios) — fix compartilhado (`gap: 4px` em `.file-tree-item`, removido o `margin-right` redundante de `.file-tree-item-icon`), ver `.specs/modules/files.md`'s entrada equivalente pro detalhe técnico. Confirmado antes de implementar: o problema era o espaçamento entre chevron/ícone/texto, não a posição do badge de contagem nem truncamento.
+- **Segundo fix, mesmo dia** — desalinhamento vertical do texto com os ícones (`.file-tree-item-name` ganhou `line-height: 16px` explícito) — ver `.specs/modules/files.md`'s entrada equivalente pro detalhe técnico; reflete aqui automaticamente, mesmas classes compartilhadas.
+- **Terceiro fix, mesmo dia** — o chevron de expandir continuava visivelmente mais alto que o ícone de pasta/texto, num novo print. Causa: `.file-tree-item-icon` já tinha `line-height: 0` desde 2026-09-27, mas `.file-tree-item-chevron` (mesmo tipo de box 16x16) nunca recebeu o mesmo tratamento. Fix: `.file-tree-item-chevron` ganhou `line-height: 0` também — ver `.specs/modules/files.md`'s entrada equivalente.
+- Task: `.specs/tasks/sidebar-row-spacing.md`.
 - **Implementado 2026-10-14, pedido do usuário — menu de contexto da conexão ganha "Editar".** `DatabasePanel.tsx`'s `ctxMenu` ganhou uma entrada "Editar" (ícone de lápis) entre "Rename" e "Reconnect", chamando o mesmo `startEdit(conn)` já usado pelo ícone de lápis da linha — abre `ConnectionModal.tsx` com os dados da conexão. Task: `.specs/tasks/connection-context-menu-edit.md`.
