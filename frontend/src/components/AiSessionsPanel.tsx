@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Play, Trash2 } from 'lucide-react'
+import { Play, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { ListClaudeSessions, ListCodexSessions, DeleteClaudeSession, DeleteCodexSession } from '../../wailsjs/go/main/App'
+import { ListClaudeSessions, ListCodexSessions, DeleteClaudeSession, DeleteCodexSession, GetInstalledAiEngines } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models'
 import { useWorkspaceStore } from '../stores/workspaceStore'
+import { AI_ENGINE_LABEL, type AiEngine } from '../utils/aiEngines'
 
 type AiSession = main.AiSession
 
 interface Props {
-  onOpenSessionTerminal: (command: string) => void
+  onOpenSessionTerminal: (engine: AiEngine, sessionId?: string) => void
 }
 
 const PAGE_SIZE = 5
@@ -24,8 +25,16 @@ export default function AiSessionsPanel({ onOpenSessionTerminal }: Props) {
   const [loading, setLoading] = useState(true)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [confirmDelete, setConfirmDelete] = useState<AiSession | null>(null)
+  // Engines instalados nesta máquina (claude/codex no PATH) — só mostra um
+  // botão de "nova sessão" pra cada um que realmente existir. Carregado uma
+  // vez (não depende do workspace).
+  const [installedEngines, setInstalledEngines] = useState<AiEngine[]>([])
 
   const cwd = currentWorkspace?.path ?? ''
+
+  useEffect(() => {
+    GetInstalledAiEngines().then(list => setInstalledEngines(list as AiEngine[])).catch(() => setInstalledEngines([]))
+  }, [])
 
   const load = async (path: string) => {
     setLoading(true)
@@ -51,10 +60,11 @@ export default function AiSessionsPanel({ onOpenSessionTerminal }: Props) {
   }
 
   const handleOpen = (session: AiSession) => {
-    const command = session.engine === 'claude'
-      ? `claude --resume ${session.id}`
-      : `codex resume ${session.id}`
-    onOpenSessionTerminal(command)
+    onOpenSessionTerminal(session.engine as AiEngine, session.id)
+  }
+
+  const handleNewSession = (engine: AiEngine) => {
+    onOpenSessionTerminal(engine)
   }
 
   const handleDelete = async () => {
@@ -75,6 +85,19 @@ export default function AiSessionsPanel({ onOpenSessionTerminal }: Props) {
 
   return (
     <div className="ai-sessions-panel">
+      {installedEngines.length > 0 && (
+        <div className="ai-sessions-new-session-row">
+          {installedEngines.map(engine => (
+            <button
+              key={engine}
+              className="ai-sessions-new-session-btn"
+              onClick={() => handleNewSession(engine)}
+            >
+              <Plus size={12} /> {AI_ENGINE_LABEL[engine]}
+            </button>
+          ))}
+        </div>
+      )}
       {loading ? (
         <div className="ai-sessions-panel-empty">{t('loading')}</div>
       ) : sessions.length === 0 ? (

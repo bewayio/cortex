@@ -2,7 +2,12 @@
   "settings": {
     "title": "Configuración",
     "sections": {
-      "language": "Idioma"
+      "language": "Idioma",
+      "dockLayout": "Diseño predeterminado"
+    },
+    "dockLayout": {
+      "terminalBottomChatRight": "Terminal abajo / Chat a la derecha",
+      "terminalRightChatBottom": "Terminal a la derecha / Chat abajo"
     }
   },
   "language": {
@@ -44,5 +49,12 @@
     "removeFromHistory": "Eliminar del historial permanentemente",
     "closeKeepHistory": "Cerrar (permanece en Abiertos Alguna Vez)",
     "removeFromHistoryShort": "Eliminar del historial"
+  },
+  "menuBar": {
+    "terminal": "Terminal",
+    "aiChats": "Chats con IA",
+    "newTerminal": "Nueva terminal",
+    "openChat": "Abrir chat",
+    "newSession": "Nueva sesión"
   }
 }

@@ -527,3 +527,17 @@ func (a *App) DeleteClaudeSession(sessionID string) error {
 	}
 	return os.Remove(file)
 }
+
+// GetInstalledAiEngines reports which AI CLIs are available on PATH, so the
+// sidebar only offers a "new session" button for an engine the user actually
+// has. See .specs/tasks/ai-terminal-session-persistence-and-new-session-buttons.md.
+func (a *App) GetInstalledAiEngines() []string {
+	engines := []string{}
+	if _, err := exec.LookPath("claude"); err == nil {
+		engines = append(engines, "claude")
+	}
+	if _, err := exec.LookPath("codex"); err == nil {
+		engines = append(engines, "codex")
+	}
+	return engines
+}

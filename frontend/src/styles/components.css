@@ -57,16 +57,84 @@
 .app-titlebar-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--fg); }
 .app-titlebar-close:hover { background: #e81123; color: #fff; }
 
-/* Botão de menu (abre o modal de Configurações) — sempre à esquerda, mesmo
-   lugar em todo sistema. `margin-right: auto` o desgruda do grupo de botões
-   de janela (que fica à direita via justify-content: flex-end no pai),
-   funcionando com ou sem esse grupo presente (ele só existe em
-   Linux/Windows). Largura menor que os outros botões (não tem o mesmo peso
-   visual que minimizar/maximizar/fechar). */
+/* Grupo de menus (Terminal, Chats com IA, Configurações) — sempre à
+   esquerda, mesmo lugar em todo sistema. `margin-right: auto` o desgruda do
+   grupo de botões de janela (que fica à direita via justify-content:
+   flex-end no pai), funcionando com ou sem esse grupo presente (ele só
+   existe em Linux/Windows). Ver .specs/tasks/system-menu-terminal-and-ai-chats.md. */
 .app-titlebar-menu {
-  width: 32px;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  height: 100%;
   margin-right: auto;
+  --wails-draggable: no-drag;
+}
+
+/* ─── Title bar menu bar (MenuDropdown.tsx) ─────────────────────────────────
+   Primeiro dropdown/submenu deste app — antes só existia o botão direto de
+   Configurações. Submenu expande inline (sem flyout flutuante), mais simples
+   de acertar em WebKitGTK. */
+.menubar-item {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.app-titlebar-menu-btn {
+  height: 100%;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+.app-titlebar-menu-btn:hover,
+.app-titlebar-menu-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg);
+}
+.menubar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  padding: 4px;
+  z-index: 10001;
+  --wails-draggable: no-drag;
+}
+.menubar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--fg);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.menubar-row:hover { background: rgba(255,255,255,0.08); }
+.menubar-separator {
+  height: 1px;
+  background: var(--divider);
+  margin: 4px 2px;
+}
+.menubar-submenu-items { padding-left: 10px; }
+.menubar-empty {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--fg-dim);
 }
 
 .app-main {
@@ -100,8 +168,15 @@
   flex-direction: column;
   align-items: center;
   padding-top: 4px;
+  padding-bottom: 4px;
   gap: 2px;
   flex-shrink: 0;
+}
+
+/* Terminal fica no rodapé da barra, separado do grupo de painéis no topo
+   (Explorer/Git/Database/AI Sessions) — pedido do usuário, 2026-10-18. */
+.activity-bar-footer-btn {
+  margin-top: auto;
 }
 
 .activity-bar-btn {
@@ -3052,4 +3127,29 @@ mark.search-highlight {
   padding: 6px 8px;
 }
 .ai-sessions-load-more:hover { background: rgba(255,255,255,0.06); color: var(--fg); }
+
+/* Botões "nova sessão" (Claude/Codex) no topo do painel — ver
+   .specs/tasks/ai-terminal-session-persistence-and-new-session-buttons.md. */
+.ai-sessions-new-session-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.ai-sessions-new-session-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--divider);
+  color: var(--fg-dim);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+.ai-sessions-new-session-btn:hover { background: rgba(255,255,255,0.06); color: var(--fg); }
 

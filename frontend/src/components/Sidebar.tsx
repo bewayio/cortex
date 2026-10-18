@@ -7,6 +7,7 @@ import GitPanel from './GitPanel'
 import DatabasePanel, { DatabasePanelHandle } from './DatabasePanel'
 import AiSessionsPanel from './AiSessionsPanel'
 import { useWorkspaceStore } from '../stores/workspaceStore'
+import type { AiEngine } from '../utils/aiEngines'
 
 type Panel = 'explorer' | 'git' | 'database' | 'aiSessions'
 
@@ -18,7 +19,7 @@ interface Props {
   // dependendo de qual painel está ativo.
   explorerActionsRef: React.MutableRefObject<FileExplorerHandle | null>
   dbActionsRef: React.MutableRefObject<DatabasePanelHandle | null>
-  onOpenSessionTerminal: (command: string) => void
+  onOpenSessionTerminal: (engine: AiEngine, sessionId?: string) => void
 }
 
 export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsRef, dbActionsRef, onOpenSessionTerminal }: Props) {

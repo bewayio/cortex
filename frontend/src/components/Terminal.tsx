@@ -11,6 +11,9 @@ import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { usePlatform } from '../utils/platform'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import { useEditorStore } from '../stores/editorStore'
+import { buildAiCommand, AI_ENGINE_LABEL, type AiEngine } from '../utils/aiEngines'
+import { getDefaultTerminalDock } from '../utils/defaultDock'
+import type { Dock } from '../utils/dock'
 import type { ILink, ILinkProvider } from '@xterm/xterm'
 
 // Shift+Enter envia LF (Ctrl+J): Claude Code e Codex tratam como nova linha no prompt.
@@ -78,13 +81,18 @@ function registerTerminalLinkProvider(xterm: XTerm, isMac: () => boolean, openFi
 // byte, do mesmo jeito que fazem num terminal nativo (ADR-0008). Cmd+V no macOS
 // fica de fora por enquanto — decisão separada.
 
-type Dock = 'bottom' | 'right'
-
 interface TermTab {
   id: string
   type: 'terminal'
   title: string
   dock: Dock
+  // Presente só quando esta aba está rodando `claude`/`codex` via botão de
+  // nova sessão ou via "Abrir" do painel AI Sessions (nunca setado quando o
+  // usuário digita o comando manualmente num shell comum) — usado pra
+  // persistir e re-retomar a sessão num relaunch do app. Ver
+  // .specs/tasks/ai-terminal-session-persistence-and-new-session-buttons.md.
+  engine?: AiEngine
+  sessionId?: string
   xterm?: XTerm
   fitAddon?: FitAddon
 }
@@ -97,11 +105,30 @@ interface WsSnapshot {
 
 export interface TerminalHandle {
   // Abre um terminal novo já "digitando" o comando (ex: `claude --resume
-  // <id>`) assim que o shell sobe — usado pela aba AI Sessions pra retomar
-  // uma sessão. Não é um parâmetro de StartTerminal (que só abre um shell em
-  // branco): equivale a chamar TerminalInput logo depois do terminal existir,
-  // como se o usuário tivesse digitado e apertado Enter.
-  openWithCommand: (command: string, dock?: Dock) => void
+  // <id>`) assim que o shell sobe — usado pelo painel AI Sessions pra
+  // retomar uma sessão existente ou iniciar uma nova. Não é um parâmetro de
+  // StartTerminal (que só abre um shell em branco): equivale a chamar
+  // TerminalInput logo depois do terminal existir, como se o usuário
+  // tivesse digitado e apertado Enter. `ai`, quando informado, marca a aba
+  // como terminal de IA (nome "Claude"/"Codex", elegível a auto-resume num
+  // relaunch — ver aiMeta mais abaixo).
+  openWithCommand: (command: string, dock?: Dock, ai?: { engine: AiEngine; sessionId?: string }) => void
+  // Cria um terminal comum novo (sem comando), no dock informado ou no
+  // padrão configurado em Configurações. Usado pelo menu "Terminal" da
+  // title bar — quando ainda não há nenhum terminal montado, o chamador usa
+  // `setShowTerminal(true)` em vez disso (a montagem já cria um terminal
+  // padrão sozinha).
+  newTerminal: (dock?: Dock) => void
+  // Lista completa das abas (não só a contagem de onTabCountChange) — usada
+  // pelos menus "Terminal"/"Chats com IA" da title bar pra montar a lista de
+  // abas abertas. Consultada sob demanda (ao abrir o menu), não espelhada
+  // num segundo estado em App.tsx/TitleBar.tsx. Ver
+  // .specs/tasks/system-menu-terminal-and-ai-chats.md.
+  listTabs: () => Array<{ id: string; title: string; dock: Dock; engine?: AiEngine }>
+  // Foca uma aba pelo id: ativa ela no dock onde já está (o chamador é
+  // responsável por garantir que o dock esteja visível — ver App.tsx) e
+  // move o foco de teclado pro xterm.
+  focusTab: (id: string) => void
 }
 
 interface Props {
@@ -204,7 +231,7 @@ export default function Terminal({
   }, [openOrFocusTab])
 
   // ── Cria terminal PTY ─────────────────────────────────────────────────────
-  const createTerminal = useCallback(async (tabDock: Dock = 'bottom'): Promise<TermTab | null> => {
+  const createTerminal = useCallback(async (tabDock: Dock = 'bottom', ai?: { engine: AiEngine; sessionId?: string }): Promise<TermTab | null> => {
     const wrapper = tabDock === 'bottom' ? wrapperBottomRef.current : wrapperRightRef.current
     if (!wrapper) return null
 
@@ -291,7 +318,8 @@ export default function Terminal({
     xterm.onResize(({ rows, cols }) => TerminalResize(id, rows, cols).catch(console.error))
 
     tabCount.current += 1
-    return { id, type: 'terminal', title: `Terminal ${tabCount.current}`, dock: tabDock, xterm, fitAddon }
+    const title = ai ? AI_ENGINE_LABEL[ai.engine] : `Terminal ${tabCount.current}`
+    return { id, type: 'terminal', title, dock: tabDock, engine: ai?.engine, sessionId: ai?.sessionId, xterm, fitAddon }
   }, [])
 
   const scheduleFit = useCallback((tab: TermTab) => {
@@ -316,14 +344,14 @@ export default function Terminal({
 
   // ── Persiste configuração de abas no localStorage ────────────────────────
   const saveTabConfig = useCallback((wsId: string, tabList: TermTab[], activeBottom: string | null, activeRight: string | null) => {
-    const config = tabList.map(t => ({ id: t.id, type: t.type, title: t.title, dock: t.dock }))
+    const config = tabList.map(t => ({ id: t.id, type: t.type, title: t.title, dock: t.dock, engine: t.engine, sessionId: t.sessionId }))
     localStorage.setItem(`bcode.termtabs.${wsId}`, JSON.stringify({ tabs: config, activeBottomId: activeBottom, activeRightId: activeRight }))
   }, [])
 
   // `dock` ausente em configs salvas antes do suporte a drag-to-dock vira 'bottom' na leitura.
   // `activeId` (formato antigo, dock único) vira activeBottomId se a aba apontada ainda existir.
   const loadTabConfig = useCallback((wsId: string): {
-    tabs: Array<{id:string;type:string;title:string;dock?:Dock}>
+    tabs: Array<{id:string;type:string;title:string;dock?:Dock;engine?:AiEngine;sessionId?:string}>
     activeBottomId: string | null
     activeRightId: string | null
   } | null => {
@@ -376,15 +404,26 @@ export default function Terminal({
           for (const saved of savedConfig.tabs) {
             // Abas de chat salvas por versões antigas são ignoradas
             if (saved.type === 'chat') continue
-            const tab = await createTerminal(saved.dock ?? 'bottom')
-            if (tab) { tab.title = saved.title; created.push(tab) }
+            const ai = saved.engine ? { engine: saved.engine, sessionId: saved.sessionId } : undefined
+            const tab = await createTerminal(saved.dock ?? 'bottom', ai)
+            if (tab) {
+              tab.title = saved.title
+              created.push(tab)
+              // Terminal de IA salvo (botão de nova sessão ou "Abrir" do painel
+              // AI Sessions, nunca digitado manualmente) — re-retoma a mesma
+              // sessão automaticamente assim que o shell sobe, igual ao fluxo
+              // normal de abrir (ver addTerminalTab). Uma sessão inválida/
+              // expirada só mostra o erro do próprio CLI dentro do terminal,
+              // não impede o resto do restore.
+              if (ai) TerminalInput(tab.id, buildAiCommand(ai.engine, ai.sessionId) + '\n').catch(console.error)
+            }
           }
         }
         if (!created.length) {
-          // Nenhuma config salva — cria terminais padrão
+          // Nenhuma config salva — cria terminais padrão, no dock configurado em Configurações
           const count = Math.max(1, initialCount)
           for (let i = 0; i < count; i++) {
-            const tab = await createTerminal()
+            const tab = await createTerminal(getDefaultTerminalDock())
             if (tab) created.push(tab)
           }
         }
@@ -484,12 +523,17 @@ export default function Terminal({
         for (const s of saved.tabs) {
           // Abas de chat salvas por versões antigas são ignoradas
           if (s.type === 'chat') continue
-          const tab = await createTerminal(s.dock ?? 'bottom')
-          if (tab) { tab.title = s.title; created.push(tab) }
+          const ai = s.engine ? { engine: s.engine, sessionId: s.sessionId } : undefined
+          const tab = await createTerminal(s.dock ?? 'bottom', ai)
+          if (tab) {
+            tab.title = s.title
+            created.push(tab)
+            if (ai) TerminalInput(tab.id, buildAiCommand(ai.engine, ai.sessionId) + '\n').catch(console.error)
+          }
         }
       }
       if (!created.length) {
-        const tab = await createTerminal()
+        const tab = await createTerminal(getDefaultTerminalDock())
         if (tab) created.push(tab)
       }
       if (!created.length) return
@@ -515,8 +559,8 @@ export default function Terminal({
   // startupCommand (opcional): "digita" esse comando no shell assim que ele
   // sobe, como se o usuário tivesse acabado de teclar e dado Enter — usado
   // pelo openWithCommand do actionRef (abaixo), não pelo botão "+" normal.
-  const addTerminalTab = async (dock: Dock, startupCommand?: string) => {
-    const tab = await createTerminal(dock)
+  const addTerminalTab = async (dock: Dock, startupCommand?: string, ai?: { engine: AiEngine; sessionId?: string }) => {
+    const tab = await createTerminal(dock, ai)
     if (!tab) return
     const next = [...tabsRef.current, tab]
     setTabs(next)
@@ -531,7 +575,20 @@ export default function Terminal({
   useEffect(() => {
     if (!actionRef) return
     actionRef.current = {
-      openWithCommand: (command, dock = 'bottom') => { addTerminalTab(dock, command) },
+      openWithCommand: (command, dock = 'right', ai) => { addTerminalTab(dock, command, ai) },
+      newTerminal: (dock) => { addTerminalTab(dock ?? getDefaultTerminalDock()) },
+      listTabs: () => tabsRef.current.map(t => ({ id: t.id, title: t.title, dock: t.dock, engine: t.engine })),
+      focusTab: (id) => {
+        const tab = tabsRef.current.find(t => t.id === id)
+        if (!tab) return
+        if (tab.dock === 'bottom') setActiveBottomId(tab.id)
+        else setActiveRightId(tab.id)
+        // Mesmas janelas de retry de scheduleFit — o div só fica visible depois
+        // do efeito de activeBottomId/activeRightId rodar (showOnlyInDock).
+        for (const delay of [30, 120, 350]) {
+          setTimeout(() => { try { tab.xterm?.focus() } catch {} }, delay)
+        }
+      },
     }
   })
 

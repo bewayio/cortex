@@ -2,12 +2,15 @@ import React, { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SUPPORTED_LANGUAGES, SupportedLanguage, getCurrentLanguage, setLanguage } from '../i18n'
+import { DefaultDockPreset, getDefaultDockPreset, setDefaultDockPreset } from '../utils/defaultDock'
 
 interface Props {
   onClose: () => void
 }
 
-type SectionId = 'language'
+type SectionId = 'language' | 'dockLayout'
+
+const DOCK_PRESETS: DefaultDockPreset[] = ['terminal-bottom-chat-right', 'terminal-right-chat-bottom']
 
 // Modal de configurações — lista de seções à esquerda, conteúdo ao centro
 // (estilo VS Code settings). Só "Idioma" por enquanto; a estrutura (array de
@@ -17,6 +20,7 @@ export default function SettingsModal({ onClose }: Props) {
   const { t } = useTranslation('shell')
   const [activeSection, setActiveSection] = useState<SectionId>('language')
   const [currentLang, setCurrentLang] = useState<SupportedLanguage>(getCurrentLanguage())
+  const [currentDockPreset, setCurrentDockPreset] = useState<DefaultDockPreset>(getDefaultDockPreset())
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -26,11 +30,17 @@ export default function SettingsModal({ onClose }: Props) {
 
   const sections: { id: SectionId; label: string }[] = [
     { id: 'language', label: t('settings.sections.language') },
+    { id: 'dockLayout', label: t('settings.sections.dockLayout') },
   ]
 
   const handleSelectLanguage = (lang: SupportedLanguage) => {
     setLanguage(lang)
     setCurrentLang(lang)
+  }
+
+  const handleSelectDockPreset = (preset: DefaultDockPreset) => {
+    setDefaultDockPreset(preset)
+    setCurrentDockPreset(preset)
   }
 
   return (
@@ -66,6 +76,21 @@ export default function SettingsModal({ onClose }: Props) {
                   >
                     <span className="settings-modal-option-radio" />
                     {t(`language.${lang}`)}
+                  </div>
+                ))}
+              </>
+            )}
+            {activeSection === 'dockLayout' && (
+              <>
+                <div className="settings-modal-section-title">{t('settings.sections.dockLayout')}</div>
+                {DOCK_PRESETS.map(preset => (
+                  <div
+                    key={preset}
+                    className={`settings-modal-option ${currentDockPreset === preset ? 'selected' : ''}`}
+                    onClick={() => handleSelectDockPreset(preset)}
+                  >
+                    <span className="settings-modal-option-radio" />
+                    {t(`settings.dockLayout.${preset === 'terminal-bottom-chat-right' ? 'terminalBottomChatRight' : 'terminalRightChatBottom'}`)}
                   </div>
                 ))}
               </>

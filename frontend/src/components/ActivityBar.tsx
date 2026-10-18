@@ -55,7 +55,7 @@ export default function ActivityBar({ activePanel, onPanelChange, onToggleTermin
       </button>
 
       <button
-        className="activity-bar-btn"
+        className="activity-bar-btn activity-bar-footer-btn"
         title={t('activityBar.toggleTerminal')}
         onClick={onToggleTerminal}
       >

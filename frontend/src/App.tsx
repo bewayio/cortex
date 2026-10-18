@@ -22,6 +22,9 @@ import ProjectSwitcher from './components/ProjectSwitcher'
 import SettingsModal from './components/SettingsModal'
 import { registerNewItemShortcut } from './utils/newItemShortcut'
 import { usePlatform } from './utils/platform'
+import { buildAiCommand, type AiEngine } from './utils/aiEngines'
+import { getDefaultChatDock } from './utils/defaultDock'
+import type { Dock } from './utils/dock'
 import {
   GetRecentWorkspaces,
   GetEverOpenedWorkspaces,
@@ -38,6 +41,7 @@ import {
   WatchWorkspace,
   ListSavedQueries,
   ConfirmQuit,
+  GetInstalledAiEngines,
 } from '../wailsjs/go/main/App'
 import { buildCommands } from './utils/commands'
 import { Workspace, EditorTab, ViewMode } from './types'
@@ -50,12 +54,27 @@ function lsInt(key: string, def: number) {
 }
 export default function App() {
   const [activePanel, setActivePanel]       = useState<Panel>('explorer')
-  const [showTerminal, setShowTerminal]     = useState(false)
+  // `bcode.terminalVisible` já era salvo a cada mudança (abaixo), mas nunca
+  // tinha sido lido de volta aqui — o painel sempre nascia fechado, então
+  // `Terminal.tsx` nunca chegava a montar (nem restaurar abas salvas, nem
+  // re-retomar sessões de IA — ver .specs/tasks/ai-terminal-session-persistence-and-new-session-buttons.md)
+  // até o usuário abrir o painel manualmente depois de cada reabertura do
+  // app. Bug relatado pelo usuário, 2026-10-18.
+  const [showTerminal, setShowTerminal]     = useState(() => localStorage.getItem('bcode.terminalVisible') === '1')
   const [terminalHeight, setTerminalHeight] = useState(() => lsInt('bcode.terminalHeight', 220))
   const [sidebarWidth, setSidebarWidth]     = useState(() => lsInt('bcode.sidebarWidth', 240))
   const [terminalInitialCount, setTerminalInitialCount] = useState(1)
   const [terminalWidth, setTerminalWidth] = useState(() => lsInt('bcode.terminalWidth', 420))
   const [terminalMounted, setTerminalMounted] = useState(false)
+  // Engines de IA instalados nesta máquina — alimenta o menu "Chats com IA"
+  // da title bar (mesmo check que o painel AI Sessions já faz por conta
+  // própria; duplicar essa chamada barata evita acoplar os dois componentes
+  // a um estado compartilhado por algo tão simples). Ver
+  // .specs/tasks/system-menu-terminal-and-ai-chats.md.
+  const [installedAiEngines, setInstalledAiEngines] = useState<AiEngine[]>([])
+  useEffect(() => {
+    GetInstalledAiEngines().then(list => setInstalledAiEngines(list as AiEngine[])).catch(() => setInstalledAiEngines([]))
+  }, [])
   // Cada dock mostra/esconde terminais independentemente — nenhum dos dois é
   // mais "o" dock do terminal; um terminal arrastado pra qualquer um dos dois
   // fica lá até ser arrastado de volta ou fechado.
@@ -326,22 +345,45 @@ export default function App() {
   // consumido pelo efeito logo abaixo assim que `terminalMounted` vira true —
   // só então o actionRef do Terminal (populado pelo próprio efeito dele, que
   // roda antes deste por ser filho) existe de verdade.
-  const pendingTerminalCommandRef = useRef<string | null>(null)
-  const openSessionTerminal = useCallback((command: string) => {
+  const pendingTerminalCommandRef = useRef<{ command: string; ai: { engine: AiEngine; sessionId?: string }; dock: Dock } | null>(null)
+  // Chamado pelo AiSessionsPanel e pelo menu "Chats com IA" da title bar:
+  // `engine` sem `sessionId` é "nova sessão", com `sessionId` é "Abrir" numa
+  // sessão existente da lista — ambos abrem no dock padrão configurado em
+  // Configurações (getDefaultChatDock), nomeados "Claude"/"Codex" (ver
+  // Terminal.tsx).
+  const openSessionTerminal = useCallback((engine: AiEngine, sessionId?: string) => {
+    const command = buildAiCommand(engine, sessionId)
+    const ai = { engine, sessionId }
+    const dock = getDefaultChatDock()
     if (terminalMounted) {
-      terminalActionsRef.current?.openWithCommand(command)
+      terminalActionsRef.current?.openWithCommand(command, dock, ai)
     } else {
-      pendingTerminalCommandRef.current = command
+      pendingTerminalCommandRef.current = { command, ai, dock }
       setShowTerminal(true)
     }
   }, [terminalMounted])
   useEffect(() => {
     if (terminalMounted && pendingTerminalCommandRef.current) {
-      const cmd = pendingTerminalCommandRef.current
+      const { command, ai, dock } = pendingTerminalCommandRef.current
       pendingTerminalCommandRef.current = null
-      terminalActionsRef.current?.openWithCommand(cmd)
+      terminalActionsRef.current?.openWithCommand(command, dock, ai)
     }
   }, [terminalMounted])
+
+  // Menu "Terminal" da title bar — "Novo terminal" e foco em aba existente.
+  // Se nenhum terminal foi aberto ainda, `terminalActionsRef` não existe:
+  // `setShowTerminal(true)` já basta, a própria montagem cria um terminal
+  // padrão (ver Terminal.tsx) — não precisa do mesmo pending-ref de
+  // openSessionTerminal, porque não há um comando específico a preservar.
+  const handleNewTerminalFromMenu = useCallback(() => {
+    if (terminalMounted) terminalActionsRef.current?.newTerminal()
+    else setShowTerminal(true)
+  }, [terminalMounted])
+  const handleFocusTerminal = useCallback((id: string) => {
+    setShowTerminal(true)
+    terminalActionsRef.current?.focusTab(id)
+  }, [])
+  const getTerminalTabs = useCallback(() => terminalActionsRef.current?.listTabs() ?? [], [])
 
   // ── Salva ao fechar ───────────────────────────────────────────────────────
   // `beforeunload` não dá pra confiar: é fire-and-forget (não há como esperar
@@ -560,7 +602,14 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      <TitleBar onOpenSettings={() => setSettingsOpen(true)} />
+      <TitleBar
+        onOpenSettings={() => setSettingsOpen(true)}
+        onNewTerminal={handleNewTerminalFromMenu}
+        getTerminalTabs={getTerminalTabs}
+        onFocusTerminal={handleFocusTerminal}
+        installedAiEngines={installedAiEngines}
+        onNewAiChat={engine => openSessionTerminal(engine)}
+      />
       <div className="app-main">
         <ActivityBar
           activePanel={activePanel}
