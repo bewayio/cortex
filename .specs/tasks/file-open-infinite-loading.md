@@ -18,7 +18,7 @@ connections:
 
 ## Status
 
-implemented (2026-10-17) — real root cause confirmed and fixed: Monaco Editor fetched from a CDN by default, hanging every file tab on "Loading..." when that fetch didn't resolve. See "Actual Root Cause" below. The AppImage/GIO hypothesis further down remains a separate, real, but secondary finding — not what the user was actually hitting.
+done (2026-10-17) for the primary bug (Monaco CDN dependency) — verified live by the user against a real rebuilt binary (`build/bin/cortex`): file tabs open normally now, no more "Loading...". The AppImage/GIO hypothesis further down remains a separate, real, secondary finding, not yet fixed — tracked by `.specs/tasks/file-open-infinite-loading-plan.md` Phases 1–2 (Phase 0.5, the terminal env leak, is already done).
 
 ## Goal
 
@@ -56,7 +56,7 @@ The user's exact symptom: clicking a file in the sidebar tree opens a tab that s
 - Worker import paths had to skip the `esm/vs/` prefix (e.g. `monaco-editor/editor/editor.worker.js`, not `monaco-editor/esm/vs/editor/editor.worker.js`) — `monaco-editor@0.57`'s own `package.json` `exports` map already injects that prefix via `"./*.js": "./esm/vs/*.js"`; including it in the import specifier doubled it into a path that doesn't exist.
 - `frontend/src/vite-env.d.ts` (new) added for `tsc` to recognize Vite's `?worker` import type (`/// <reference types="vite/client" />` — tsconfig had no `types` entry for it).
 - Verified: `npm run build` (`tsc && vite build`) clean, Monaco's per-language chunks now appear in the build output as locally bundled assets, not fetched externally.
-- **Not yet verified**: a live relaunch of the actual installed/built app confirming a file tab now opens without hitting the network at all. Should be checked once a new build is available to install.
+- **Verified 2026-10-17**: rebuilt with `NODE_OPTIONS="--max-old-space-size=8192" wails build` (default Node heap OOM'd on this machine trying to minify the now-bundled Monaco chunks — `FATAL ERROR: Ineffective mark-compacts near heap limit`; this flag is now needed for any build on a machine with heavy memory pressure, not yet added to CI, see Notes below), launched the resulting `build/bin/cortex` directly, user opened a file and confirmed it loads normally — no more stuck "Loading...".
 
 ## Secondary Finding (real, but not what the user was hitting): AppImage GIO/GVFS module shadowing (2026-10-17, live diagnosis on the user's machine)
 

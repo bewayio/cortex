@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: modules
-last_updated: 2026-10-03
-version: 10
+last_updated: 2026-10-17
+version: 11
 connections:
   parent: .specs/architecture/overview.md
   children: []
@@ -79,7 +79,8 @@ None.
   2. Packaging via `linuxdeploy --appdir AppDir --output appimage` **silently regenerates `AppDir/AppRun` from scratch**, wiping the `cd` patch from (1) before the final package was ever produced. Fixed by downloading `appimagetool` directly and invoking it on `AppDir` instead of going through `linuxdeploy`'s own output step a second time.
   3. Once the helper process was actually found and spawned, it failed with its own `error while loading shared libraries: libwebkit2gtk-4.0.so.37` — `linuxdeploy` sets each helper binary's rpath to `$ORIGIN` (its own directory), but the bundled `libwebkit2gtk-4.0.so.37` these helpers depend on lives one level up (`linuxdeploy` flattens shared libraries into `usr/lib/`, not the nested libexec directory). Fixed by also exporting `LD_LIBRARY_PATH="$APPDIR/usr/lib"` in the same `AppRun` patch.
   **Verified working**: the resulting AppImage ran for 10+ seconds without crashing in a clean Ubuntu 24.04 container with zero webkit2gtk packages installed (Xvfb + software GL, no real display needed) — the exact failure mode reported. Not yet re-verified with a real CI run (the Docker reproduction used the same build steps but is not the GitHub Actions runner itself), but this is now a *verified fix*, not another guess.
-- Task: `.specs/tasks/release-pipeline.md`, `.specs/tasks/linux-appimage-packaging.md`.
+- **Corrigido 2026-10-17, pedido do usuário — build local falhou com `FATAL ERROR: Ineffective mark-compacts near heap limit... JavaScript heap out of memory` (exit 134).** Causa: a correção do bug de "Loading..." eterno (`.specs/tasks/file-open-infinite-loading.md`) passou a bundlar `monaco-editor` localmente em vez de buscar de um CDN — minificar seus chunks no `vite build` passa do limite padrão de heap do V8 em máquina com memória sob pressão (27GB total, mas só ~3.5GB livres no momento do build, o resto em uso por outros apps). Fix: `wails build` rodado com `NODE_OPTIONS="--max-old-space-size=8192"`. Adicionado ao `release.yml`'s step `Build` como `env:` — seguro mesmo em runners com bastante RAM livre, sem custo real. **Não verificado ainda em uma run real do GitHub Actions.**
+- Task: `.specs/tasks/release-pipeline.md`, `.specs/tasks/linux-appimage-packaging.md`, `.specs/tasks/file-open-infinite-loading.md`.
 - **Corrigido 2026-10-13, pedido do usuário — rename pra "Cortex" (`.specs/tasks/rename-to-cortex.md`) quebrou este workflow.** `wails.json`'s `outputfilename` virou `cortex` e `build/linux/bcode.desktop` virou `cortex.desktop` — o workflow ainda esperava `build/bin/bcode` e o `.desktop` antigo, então o próximo push pra `main` teria quebrado o build Linux (passo "Package (Linux)" falharia no `cp`). Corrigido: `bin`/`asset` da matrix de build viraram `cortex`/`cortex.app`/`cortex.exe` e `cortex-{linux-x86_64.AppImage,macos-universal.zip,windows-amd64.zip}`; os `cp`/`--desktop-file`/`--icon-file` do passo de empacotamento Linux apontam pro `cortex.desktop`/`cortex.png`; o `grep` do passo de atualização do cask Homebrew procura por `cortex-macos-universal.zip` (nome do asset) em vez de `bcode-macos-universal.zip`.
   - **Deliberadamente NÃO renomeado** (decisão do usuário): o repositório externo `bewayio/homebrew-bcode`, o arquivo `Casks/bcode.rb` dentro dele, e o secret `BCODE_RELEASE_TOKEN` — mexer nisso é criar/renomear um repositório GitHub de verdade, fora do que um assistente faz sem confirmação explícita separada.
   - **Consequência que fica para o usuário resolver** (fora do que esta correção cobre): o `Casks/bcode.rb` em si vive no repositório externo, não neste — seu campo `url` provavelmente referencia `bcode-macos-universal.zip` por nome, e esse asset agora se chama `cortex-macos-universal.zip`. O `sed` deste workflow só atualiza `version`/`sha256` do cask, não o `url` — o cask vai apontar pro nome de asset errado até alguém editar `url` nesse arquivo, no repositório externo, à mão.
