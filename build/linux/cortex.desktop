@@ -6,3 +6,9 @@ Exec=cortex
 Icon=cortex
 Categories=Development;IDE;
 Terminal=false
+# Wails v2.12 calls g_set_prgname() after the GTK window is already created,
+# so it never overrides the window's real WM_CLASS. Inside the AppImage, the
+# running process is linuxdeploy-plugin-gtk's env-setup wrapper, whose fixed
+# name is the actual WM_CLASS GNOME sees — not "cortex". Confirmed with
+# `xprop` against a running instance, 2026-10-18.
+StartupWMClass=AppRun.wrapped
