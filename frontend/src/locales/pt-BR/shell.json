@@ -3,11 +3,15 @@
     "title": "Configurações",
     "sections": {
       "language": "Idioma",
-      "dockLayout": "Layout padrão"
+      "dockLayout": "Layout padrão",
+      "aiClients": "Clientes de IA"
     },
     "dockLayout": {
       "terminalBottomChatRight": "Terminal embaixo / Chat à direita",
       "terminalRightChatBottom": "Terminal à direita / Chat embaixo"
+    },
+    "aiClients": {
+      "description": "Desmarque um cliente para que ele deixe de aparecer no painel AI Sessions e no menu Chats com IA — e pare de ser consultado."
     }
   },
   "language": {
@@ -54,7 +58,7 @@
     "terminal": "Terminal",
     "aiChats": "Chats com IA",
     "newTerminal": "Novo terminal",
-    "openChat": "Abrir chat",
-    "newSession": "Nova sessão"
+    "openEngineChat": "Abrir {{engine}} Chat",
+    "aiTabLastUsed": "{{title}} — último uso: {{lastUsed}}"
   }
 }

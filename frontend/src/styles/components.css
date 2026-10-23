@@ -485,6 +485,11 @@
   color: var(--fg-active);
   margin-bottom: 12px;
 }
+.settings-modal-section-description {
+  font-size: 11px;
+  color: var(--fg-dim);
+  margin-bottom: 10px;
+}
 .settings-modal-option {
   display: flex;
   align-items: center;
@@ -514,6 +519,30 @@
   height: 7px;
   border-radius: 50%;
   background: var(--accent);
+}
+/* Independent on/off toggles (ex: Clientes de IA) — square checkbox instead
+   of the radio above, since options here aren't mutually exclusive. */
+.settings-modal-option-checkbox {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--fg-dim);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-modal-option.selected .settings-modal-option-checkbox {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.settings-modal-option.selected .settings-modal-option-checkbox::after {
+  content: '';
+  width: 6px;
+  height: 3px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg) translate(0, -1px);
 }
 
 /* ConnectionModal.tsx — modal de criar/editar conexão MySQL, 3 abas

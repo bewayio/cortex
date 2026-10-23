@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: modules
-last_updated: 2026-10-11
-version: 4
+last_updated: 2026-10-22
+version: 6
 connections:
   parent: .specs/architecture/overview.md
   children: []
@@ -63,6 +63,7 @@ None.
 
 ## Notes
 
+- **Implementado 2026-10-22, pedido do usuário — fechar/remover um workspace agora mata os terminais dele.** Antes, `CloseWorkspace`/`RemoveWorkspace` só reescreviam `recent.json`/`ever_opened.json` (metadado de lista) — nenhum terminal era encerrado, mesmo em cache (`wsCache`, `terminal.md`) ou sendo o workspace **atualmente aberto** na janela. Nova orquestração vive em `App.tsx`'s `closeOrRemoveWorkspace(ws, permanent)`: chama `terminalActionsRef.current.closeWorkspaceTerminals(ws.id)` (novo em `Terminal.tsx`, mata processo + `wsCache`, nunca a config salva — ver `terminal.md`) **antes** de `CloseWorkspace`/`RemoveWorkspace`; `WorkspaceList.tsx` não chama mais essas duas funções do Wails diretamente, só o callback (`onCloseWorkspace`/`onRemoveWorkspace`, roteado por `source`, threaded por `Sidebar.tsx`/`EditorPane.tsx`/`UsageTab.tsx`). Se `ws.id` for o workspace ativo: navega pro índice 0 da lista "Open Projects" já atualizada, ou limpa pro estado vazio (`currentWorkspace = null`, já um estado real e tratado hoje — é o que a tela mostra antes do primeiro folder aberto) se não sobrar nenhum. Trocar de workspace (não fechar) continua intocado — `closeWorkspaceTerminals` só é chamado desse fluxo novo. Task: `.specs/tasks/terminal-process-cleanup.md` (dono principal: `terminal.md`, já que a correção de fundo do kill vive lá). **Verificação manual pendente do usuário.**
 - JSON formats are a user-confirmed compatibility constraint.
 - Frontend: `WorkspaceList.tsx` (now split into two sections, see below), `workspaceStore.ts`.
 - **Redesigned 2026-09-27 (supersedes the 2026-09-26 "recently closed" design), user request.** The explicit "close" action (`Archive` icon), `~/.bcode/recent_closed.json`, `GetRecentClosedWorkspaces` and `CloseWorkspace` are **removed** — replaced by a simpler two-list model requested directly:

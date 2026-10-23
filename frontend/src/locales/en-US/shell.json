@@ -3,11 +3,15 @@
     "title": "Settings",
     "sections": {
       "language": "Language",
-      "dockLayout": "Default layout"
+      "dockLayout": "Default layout",
+      "aiClients": "AI clients"
     },
     "dockLayout": {
       "terminalBottomChatRight": "Terminal bottom / Chat right",
       "terminalRightChatBottom": "Terminal right / Chat bottom"
+    },
+    "aiClients": {
+      "description": "Uncheck a client to stop it from appearing in the AI Sessions panel and the AI Chats menu — and stop it from being queried."
     }
   },
   "language": {
@@ -54,7 +58,7 @@
     "terminal": "Terminal",
     "aiChats": "AI Chats",
     "newTerminal": "New terminal",
-    "openChat": "Open chat",
-    "newSession": "New session"
+    "openEngineChat": "Open {{engine}} Chat",
+    "aiTabLastUsed": "{{title}} — last used: {{lastUsed}}"
   }
 }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { GetClaudeTokenUsage } from '../../wailsjs/go/main/App'
 import WorkspaceList from './WorkspaceList'
 import { usePlatform } from '../utils/platform'
+import type { Workspace } from '../types'
 
 type Grouping = 'day' | 'week' | 'month'
 
@@ -27,6 +28,7 @@ interface Bucket {
 
 interface Props {
   onOpenWorkspace: (path: string) => void
+  onRemoveWorkspace: (ws: Workspace) => void
 }
 
 // Semana ISO (segunda a domingo), em UTC — mesma base de data usada pelo backend.
@@ -94,7 +96,7 @@ const SHORTCUTS: { combo: string; descKey: string }[] = [
   { combo: 'Ctrl+`', descKey: 'toggleTerminal' },
 ]
 
-export default function UsageTab({ onOpenWorkspace }: Props) {
+export default function UsageTab({ onOpenWorkspace, onRemoveWorkspace }: Props) {
   const { t } = useTranslation('usage')
   const platform = usePlatform()
   const modLabel = platform === 'darwin' ? 'Cmd' : 'Ctrl'
@@ -205,7 +207,7 @@ export default function UsageTab({ onOpenWorkspace }: Props) {
         </div>
 
         <div className="usage-tab-recent">
-          <WorkspaceList onOpenWorkspace={onOpenWorkspace} source="everOpened" />
+          <WorkspaceList onOpenWorkspace={onOpenWorkspace} onRemoveWorkspace={onRemoveWorkspace} source="everOpened" />
         </div>
       </div>
     </div>

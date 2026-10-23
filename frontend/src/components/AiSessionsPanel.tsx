@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Play, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { ListClaudeSessions, ListCodexSessions, DeleteClaudeSession, DeleteCodexSession, GetInstalledAiEngines } from '../../wailsjs/go/main/App'
+import { ListClaudeSessions, ListCodexSessions, DeleteClaudeSession, DeleteCodexSession } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models'
 import { useWorkspaceStore } from '../stores/workspaceStore'
-import { AI_ENGINE_LABEL, type AiEngine } from '../utils/aiEngines'
+import { AI_ENGINE_LABEL, ALL_AI_ENGINES, type AiEngine } from '../utils/aiEngines'
+import { getEnabledAiEngines, isAiEngineEnabled, onAiClientSettingsChanged } from '../utils/aiClientSettings'
 
 type AiSession = main.AiSession
 
@@ -25,23 +26,28 @@ export default function AiSessionsPanel({ onOpenSessionTerminal }: Props) {
   const [loading, setLoading] = useState(true)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [confirmDelete, setConfirmDelete] = useState<AiSession | null>(null)
-  // Engines instalados nesta máquina (claude/codex no PATH) — só mostra um
-  // botão de "nova sessão" pra cada um que realmente existir. Carregado uma
-  // vez (não depende do workspace).
-  const [installedEngines, setInstalledEngines] = useState<AiEngine[]>([])
+  // Botões de "nova sessão": um por engine HABILITADO em Configurações >
+  // Clientes de IA — decisão do usuário, 2026-10-21, substitui a antiga
+  // checagem de instalado via PATH (GetInstalledAiEngines), que se mostrou
+  // pouco confiável em builds lançadas pelo launcher gráfico. Clicar num
+  // engine habilitado mas não de fato instalado só abre um terminal que vai
+  // dar "command not found", igual digitar o comando errado à mão.
+  const [settingsVersion, setSettingsVersion] = useState(0)
 
   const cwd = currentWorkspace?.path ?? ''
+  const availableEngines = useMemo(() => getEnabledAiEngines(ALL_AI_ENGINES), [settingsVersion])
 
   useEffect(() => {
-    GetInstalledAiEngines().then(list => setInstalledEngines(list as AiEngine[])).catch(() => setInstalledEngines([]))
+    return onAiClientSettingsChanged(() => setSettingsVersion(v => v + 1))
   }, [])
 
   const load = async (path: string) => {
     setLoading(true)
     setVisibleCount(PAGE_SIZE)
+    // Disabled engines are never queried — not just filtered out afterward.
     const [claude, codex] = await Promise.all([
-      ListClaudeSessions(path, true).catch(() => []),
-      ListCodexSessions(path, true).catch(() => []),
+      isAiEngineEnabled('claude') ? ListClaudeSessions(path, true).catch(() => []) : Promise.resolve([]),
+      isAiEngineEnabled('codex') ? ListCodexSessions(path, true).catch(() => []) : Promise.resolve([]),
     ])
     setSessions([...claude, ...codex].sort((a, b) => b.updatedAt - a.updatedAt))
     setLoading(false)
@@ -50,7 +56,7 @@ export default function AiSessionsPanel({ onOpenSessionTerminal }: Props) {
   useEffect(() => {
     if (cwd) load(cwd)
     else { setSessions([]); setLoading(false) }
-  }, [cwd]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cwd, settingsVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const visible = useMemo(() => sessions.slice(0, visibleCount), [sessions, visibleCount])
 
@@ -85,9 +91,9 @@ export default function AiSessionsPanel({ onOpenSessionTerminal }: Props) {
 
   return (
     <div className="ai-sessions-panel">
-      {installedEngines.length > 0 && (
+      {availableEngines.length > 0 && (
         <div className="ai-sessions-new-session-row">
-          {installedEngines.map(engine => (
+          {availableEngines.map(engine => (
             <button
               key={engine}
               className="ai-sessions-new-session-btn"

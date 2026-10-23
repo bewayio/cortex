@@ -93,6 +93,11 @@ interface TermTab {
   // .specs/tasks/ai-terminal-session-persistence-and-new-session-buttons.md.
   engine?: AiEngine
   sessionId?: string
+  // Atualizado a cada input do usuário (onData) ou foco da aba — usado pelo
+  // menu "Chats com IA" da title bar pra mostrar quando cada sessão de IA já
+  // aberta foi usada por último. Mutado in-place (não via setTabs), já que
+  // listTabs() lê direto de tabsRef sob demanda — não precisa re-render.
+  lastUsedAt?: number
   xterm?: XTerm
   fitAddon?: FitAddon
 }
@@ -124,11 +129,19 @@ export interface TerminalHandle {
   // abas abertas. Consultada sob demanda (ao abrir o menu), não espelhada
   // num segundo estado em App.tsx/TitleBar.tsx. Ver
   // .specs/tasks/system-menu-terminal-and-ai-chats.md.
-  listTabs: () => Array<{ id: string; title: string; dock: Dock; engine?: AiEngine }>
+  listTabs: () => Array<{ id: string; title: string; dock: Dock; engine?: AiEngine; lastUsedAt?: number }>
   // Foca uma aba pelo id: ativa ela no dock onde já está (o chamador é
   // responsável por garantir que o dock esteja visível — ver App.tsx) e
   // move o foco de teclado pro xterm.
   focusTab: (id: string) => void
+  // Mata todo terminal VIVO de um workspace (o atualmente montado ou um
+  // cacheado em wsCache de uma troca anterior nesta mesma sessão) — usado ao
+  // fechar um projeto (ver App.tsx/WorkspaceList.tsx,
+  // .specs/tasks/terminal-process-cleanup.md). Não toca na config salva em
+  // localStorage (bcode.termtabs.{workspaceId}): reabrir o projeto depois
+  // continua recriando as mesmas abas/docks/engine, igual a um restart do
+  // app — só os processos e o estado em memória morrem aqui.
+  closeWorkspaceTerminals: (workspaceId: string) => Promise<void>
 }
 
 interface Props {
@@ -305,6 +318,13 @@ export default function Terminal({
       return true
     })
 
+    tabCount.current += 1
+    const title = ai ? AI_ENGINE_LABEL[ai.engine] : `Terminal ${tabCount.current}`
+    const tab: TermTab = {
+      id, type: 'terminal', title, dock: tabDock, engine: ai?.engine, sessionId: ai?.sessionId,
+      lastUsedAt: Date.now(), xterm, fitAddon,
+    }
+
     EventsOn(`terminal:data:${id}`, (b64: string) => {
       try {
         const bin = atob(b64)
@@ -314,12 +334,10 @@ export default function Terminal({
       } catch { xterm.write(b64) }
     })
     EventsOn(`terminal:exit:${id}`, () => xterm.write('\r\n[Process exited]\r\n'))
-    xterm.onData(data => TerminalInput(id, data).catch(console.error))
+    xterm.onData(data => { tab.lastUsedAt = Date.now(); TerminalInput(id, data).catch(console.error) })
     xterm.onResize(({ rows, cols }) => TerminalResize(id, rows, cols).catch(console.error))
 
-    tabCount.current += 1
-    const title = ai ? AI_ENGINE_LABEL[ai.engine] : `Terminal ${tabCount.current}`
-    return { id, type: 'terminal', title, dock: tabDock, engine: ai?.engine, sessionId: ai?.sessionId, xterm, fitAddon }
+    return tab
   }, [])
 
   const scheduleFit = useCallback((tab: TermTab) => {
@@ -577,10 +595,11 @@ export default function Terminal({
     actionRef.current = {
       openWithCommand: (command, dock = 'right', ai) => { addTerminalTab(dock, command, ai) },
       newTerminal: (dock) => { addTerminalTab(dock ?? getDefaultTerminalDock()) },
-      listTabs: () => tabsRef.current.map(t => ({ id: t.id, title: t.title, dock: t.dock, engine: t.engine })),
+      listTabs: () => tabsRef.current.map(t => ({ id: t.id, title: t.title, dock: t.dock, engine: t.engine, lastUsedAt: t.lastUsedAt })),
       focusTab: (id) => {
         const tab = tabsRef.current.find(t => t.id === id)
         if (!tab) return
+        tab.lastUsedAt = Date.now()
         if (tab.dock === 'bottom') setActiveBottomId(tab.id)
         else setActiveRightId(tab.id)
         // Mesmas janelas de retry de scheduleFit — o div só fica visible depois
@@ -588,6 +607,39 @@ export default function Terminal({
         for (const delay of [30, 120, 350]) {
           setTimeout(() => { try { tab.xterm?.focus() } catch {} }, delay)
         }
+      },
+      closeWorkspaceTerminals: async (closedWorkspaceId) => {
+        if (closedWorkspaceId === workspaceId) {
+          const dying = tabsRef.current
+          await Promise.all(dying.map(t => {
+            EventsOff(`terminal:data:${t.id}`)
+            EventsOff(`terminal:exit:${t.id}`)
+            return CloseTerminal(t.id).catch(console.error)
+          }))
+          dying.forEach(t => {
+            t.xterm?.dispose()
+            termDivs.current.get(t.id)?.remove()
+            termDivs.current.delete(t.id)
+          })
+          setTabs([])
+          setActiveBottomId(null)
+          setActiveRightId(null)
+          reportCounts([])
+          return
+        }
+        const cached = wsCache.current.get(closedWorkspaceId)
+        if (!cached) return
+        await Promise.all(cached.tabs.map(t => {
+          EventsOff(`terminal:data:${t.id}`)
+          EventsOff(`terminal:exit:${t.id}`)
+          return CloseTerminal(t.id).catch(console.error)
+        }))
+        cached.tabs.forEach(t => {
+          t.xterm?.dispose()
+          termDivs.current.get(t.id)?.remove()
+          termDivs.current.delete(t.id)
+        })
+        wsCache.current.delete(closedWorkspaceId)
       },
     }
   })

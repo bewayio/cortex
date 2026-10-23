@@ -8,12 +8,14 @@ import DatabasePanel, { DatabasePanelHandle } from './DatabasePanel'
 import AiSessionsPanel from './AiSessionsPanel'
 import { useWorkspaceStore } from '../stores/workspaceStore'
 import type { AiEngine } from '../utils/aiEngines'
+import type { Workspace } from '../types'
 
 type Panel = 'explorer' | 'git' | 'database' | 'aiSessions'
 
 interface Props {
   activePanel: Panel
   onOpenWorkspace: (path: string) => void
+  onCloseWorkspace: (ws: Workspace) => void
   // Criados em App.tsx (não aqui) — o atalho global Ctrl/Cmd+N /
   // Ctrl/Cmd+Shift+N precisa chamar essas ações de fora da sidebar,
   // dependendo de qual painel está ativo.
@@ -22,7 +24,7 @@ interface Props {
   onOpenSessionTerminal: (engine: AiEngine, sessionId?: string) => void
 }
 
-export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsRef, dbActionsRef, onOpenSessionTerminal }: Props) {
+export default function Sidebar({ activePanel, onOpenWorkspace, onCloseWorkspace, explorerActionsRef, dbActionsRef, onOpenSessionTerminal }: Props) {
   const { t } = useTranslation('shell')
   const { currentWorkspace } = useWorkspaceStore()
 
@@ -43,7 +45,7 @@ export default function Sidebar({ activePanel, onOpenWorkspace, explorerActionsR
   return (
     <div className="sidebar-inner">
       <div className="sidebar-workspace-section">
-        <WorkspaceList onOpenWorkspace={onOpenWorkspace} />
+        <WorkspaceList onOpenWorkspace={onOpenWorkspace} onCloseWorkspace={onCloseWorkspace} />
       </div>
 
       <div className="sidebar-divider" />

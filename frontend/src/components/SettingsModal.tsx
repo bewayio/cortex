@@ -3,12 +3,14 @@ import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SUPPORTED_LANGUAGES, SupportedLanguage, getCurrentLanguage, setLanguage } from '../i18n'
 import { DefaultDockPreset, getDefaultDockPreset, setDefaultDockPreset } from '../utils/defaultDock'
+import { AI_ENGINE_LABEL, ALL_AI_ENGINES, type AiEngine } from '../utils/aiEngines'
+import { isAiEngineEnabled, setAiEngineEnabled } from '../utils/aiClientSettings'
 
 interface Props {
   onClose: () => void
 }
 
-type SectionId = 'language' | 'dockLayout'
+type SectionId = 'language' | 'dockLayout' | 'aiClients'
 
 const DOCK_PRESETS: DefaultDockPreset[] = ['terminal-bottom-chat-right', 'terminal-right-chat-bottom']
 
@@ -21,6 +23,10 @@ export default function SettingsModal({ onClose }: Props) {
   const [activeSection, setActiveSection] = useState<SectionId>('language')
   const [currentLang, setCurrentLang] = useState<SupportedLanguage>(getCurrentLanguage())
   const [currentDockPreset, setCurrentDockPreset] = useState<DefaultDockPreset>(getDefaultDockPreset())
+  const [enabledEngines, setEnabledEngines] = useState<Record<AiEngine, boolean>>(() => {
+    const entries = ALL_AI_ENGINES.map(e => [e, isAiEngineEnabled(e)] as const)
+    return Object.fromEntries(entries) as Record<AiEngine, boolean>
+  })
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -31,6 +37,7 @@ export default function SettingsModal({ onClose }: Props) {
   const sections: { id: SectionId; label: string }[] = [
     { id: 'language', label: t('settings.sections.language') },
     { id: 'dockLayout', label: t('settings.sections.dockLayout') },
+    { id: 'aiClients', label: t('settings.sections.aiClients') },
   ]
 
   const handleSelectLanguage = (lang: SupportedLanguage) => {
@@ -41,6 +48,12 @@ export default function SettingsModal({ onClose }: Props) {
   const handleSelectDockPreset = (preset: DefaultDockPreset) => {
     setDefaultDockPreset(preset)
     setCurrentDockPreset(preset)
+  }
+
+  const handleToggleEngine = (engine: AiEngine) => {
+    const next = !enabledEngines[engine]
+    setAiEngineEnabled(engine, next)
+    setEnabledEngines(prev => ({ ...prev, [engine]: next }))
   }
 
   return (
@@ -91,6 +104,22 @@ export default function SettingsModal({ onClose }: Props) {
                   >
                     <span className="settings-modal-option-radio" />
                     {t(`settings.dockLayout.${preset === 'terminal-bottom-chat-right' ? 'terminalBottomChatRight' : 'terminalRightChatBottom'}`)}
+                  </div>
+                ))}
+              </>
+            )}
+            {activeSection === 'aiClients' && (
+              <>
+                <div className="settings-modal-section-title">{t('settings.sections.aiClients')}</div>
+                <div className="settings-modal-section-description">{t('settings.aiClients.description')}</div>
+                {ALL_AI_ENGINES.map(engine => (
+                  <div
+                    key={engine}
+                    className={`settings-modal-option ${enabledEngines[engine] ? 'selected' : ''}`}
+                    onClick={() => handleToggleEngine(engine)}
+                  >
+                    <span className="settings-modal-option-checkbox" />
+                    {AI_ENGINE_LABEL[engine]}
                   </div>
                 ))}
               </>

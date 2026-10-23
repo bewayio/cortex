@@ -14,12 +14,14 @@ import { useEditorStore } from '../stores/editorStore'
 import { WriteFile } from '../../wailsjs/go/main/App'
 import { registerGlobalEditorShortcuts } from '../utils/globalEditorShortcuts'
 import { usePlatform } from '../utils/platform'
+import type { Workspace } from '../types'
 
 interface Props {
   onOpenWorkspace: (path: string) => void
+  onRemoveWorkspace: (ws: Workspace) => void
 }
 
-export default function EditorPane({ onOpenWorkspace }: Props) {
+export default function EditorPane({ onOpenWorkspace, onRemoveWorkspace }: Props) {
   const { t } = useTranslation('editor')
   const { getActiveTab, viewMode, markTabSaved, updateTabContent, closeTab } = useEditorStore()
   const activeTabId = useEditorStore(s => s.activeTabId)
@@ -117,7 +119,7 @@ export default function EditorPane({ onOpenWorkspace }: Props) {
     }
 
     if (activeTab.isGraphTab)     return <CommitGraphTab />
-    if (activeTab.isUsageTab)     return <UsageTab onOpenWorkspace={onOpenWorkspace} />
+    if (activeTab.isUsageTab)     return <UsageTab onOpenWorkspace={onOpenWorkspace} onRemoveWorkspace={onRemoveWorkspace} />
     if (activeTab.isQueryTab)     return <QueryTab tab={activeTab} />
     if (activeTab.isCommitTab)    return <CommitDiffView tab={activeTab} />
     if (activeTab.isTableTab)     return <TableTab key={activeTab.id} tab={activeTab} />

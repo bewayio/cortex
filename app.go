@@ -205,6 +205,9 @@ func (a *App) shutdown(ctx context.Context) {
 	defer a.termMu.Unlock()
 	for _, t := range a.terminals {
 		t.cancel()
+		if t.cmd.Process != nil {
+			killProcessTree(t.cmd.Process.Pid)
+		}
 		t.ptmx.Close()
 	}
 }
@@ -1392,6 +1395,9 @@ func (a *App) CloseTerminal(id string) error {
 		return nil
 	}
 	term.cancel()
+	if term.cmd.Process != nil {
+		killProcessTree(term.cmd.Process.Pid)
+	}
 	return term.ptmx.Close()
 }
 

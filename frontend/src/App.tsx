@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import ActivityBar from './components/ActivityBar'
 import Sidebar from './components/Sidebar'
 import { FileExplorerHandle } from './components/FileExplorer'
@@ -22,7 +22,8 @@ import ProjectSwitcher from './components/ProjectSwitcher'
 import SettingsModal from './components/SettingsModal'
 import { registerNewItemShortcut } from './utils/newItemShortcut'
 import { usePlatform } from './utils/platform'
-import { buildAiCommand, type AiEngine } from './utils/aiEngines'
+import { buildAiCommand, ALL_AI_ENGINES, type AiEngine } from './utils/aiEngines'
+import { getEnabledAiEngines, onAiClientSettingsChanged } from './utils/aiClientSettings'
 import { getDefaultChatDock } from './utils/defaultDock'
 import type { Dock } from './utils/dock'
 import {
@@ -41,7 +42,8 @@ import {
   WatchWorkspace,
   ListSavedQueries,
   ConfirmQuit,
-  GetInstalledAiEngines,
+  CloseWorkspace,
+  RemoveWorkspace,
 } from '../wailsjs/go/main/App'
 import { buildCommands } from './utils/commands'
 import { Workspace, EditorTab, ViewMode } from './types'
@@ -66,14 +68,22 @@ export default function App() {
   const [terminalInitialCount, setTerminalInitialCount] = useState(1)
   const [terminalWidth, setTerminalWidth] = useState(() => lsInt('bcode.terminalWidth', 420))
   const [terminalMounted, setTerminalMounted] = useState(false)
-  // Engines de IA instalados nesta máquina — alimenta o menu "Chats com IA"
-  // da title bar (mesmo check que o painel AI Sessions já faz por conta
-  // própria; duplicar essa chamada barata evita acoplar os dois componentes
-  // a um estado compartilhado por algo tão simples). Ver
-  // .specs/tasks/system-menu-terminal-and-ai-chats.md.
-  const [installedAiEngines, setInstalledAiEngines] = useState<AiEngine[]>([])
+  // Engines de IA que alimentam o menu "Chats com IA" da title bar.
+  // Decisão do usuário, 2026-10-21: a config de Configurações > Clientes de
+  // IA substituiu completamente a detecção por PATH (GetInstalledAiEngines)
+  // pra essa lista — a detecção se mostrou pouco confiável em builds
+  // lançadas pelo launcher gráfico (PATH incompleto), então o menu mostra
+  // todo engine HABILITADO, instalado ou não; clicar num que não está de
+  // fato instalado só abre um terminal que vai dar "command not found",
+  // igual a digitar o comando errado à mão. Ver
+  // .specs/tasks/ai-client-enable-toggle.md.
+  const [aiSettingsVersion, setAiSettingsVersion] = useState(0)
+  const availableAiEngines = useMemo(
+    () => getEnabledAiEngines(ALL_AI_ENGINES),
+    [aiSettingsVersion],
+  )
   useEffect(() => {
-    GetInstalledAiEngines().then(list => setInstalledAiEngines(list as AiEngine[])).catch(() => setInstalledAiEngines([]))
+    return onAiClientSettingsChanged(() => setAiSettingsVersion(v => v + 1))
   }, [])
   // Cada dock mostra/esconde terminais independentemente — nenhum dos dois é
   // mais "o" dock do terminal; um terminal arrastado pra qualquer um dos dois
@@ -214,6 +224,37 @@ export default function App() {
     refreshGit(path)
   }, [currentWorkspace, persistCurrentWs, switchWorkspace, setCurrentWorkspace,
       setFileTree, setRecentWorkspaces, setEverOpenedWorkspaces, loadTabsFromDisk, refreshGit])
+
+  // ── Fecha ("Open Projects") ou remove ("Ever Opened") um workspace ─────────
+  // Mata os terminais DELE (processo + cache em memória, nunca a config
+  // salva — reabrir depois resume igual a um restart, ver
+  // .specs/tasks/terminal-process-cleanup.md) antes de chamar o backend. Se
+  // for o workspace ATUALMENTE aberto na janela, navega pra outro projeto
+  // restante (índice 0 da lista "Open Projects" já atualizada) ou pro estado
+  // vazio (currentWorkspace null) se não sobrar nenhum.
+  const closeOrRemoveWorkspace = useCallback(async (ws: Workspace, permanent: boolean) => {
+    await terminalActionsRef.current?.closeWorkspaceTerminals(ws.id)
+    await (permanent ? RemoveWorkspace(ws.id) : CloseWorkspace(ws.id)).catch(console.error)
+
+    const [recent, everOpened] = await Promise.all([
+      GetRecentWorkspaces().catch(() => []),
+      GetEverOpenedWorkspaces().catch(() => []),
+    ])
+    setRecentWorkspaces(recent)
+    setEverOpenedWorkspaces(everOpened)
+
+    const isActive = useWorkspaceStore.getState().currentWorkspace?.id === ws.id
+    if (!isActive) return
+
+    const next = recent[0]
+    if (next) {
+      await handleOpenWorkspace(next.path)
+    } else {
+      setCurrentWorkspace(null)
+      setFileTree(null)
+      switchWorkspace('')
+    }
+  }, [handleOpenWorkspace, setRecentWorkspaces, setEverOpenedWorkspaces, setCurrentWorkspace, setFileTree, switchWorkspace])
 
   // ── Inicialização: restaura último workspace ──────────────────────────────
   useEffect(() => {
@@ -607,7 +648,7 @@ export default function App() {
         onNewTerminal={handleNewTerminalFromMenu}
         getTerminalTabs={getTerminalTabs}
         onFocusTerminal={handleFocusTerminal}
-        installedAiEngines={installedAiEngines}
+        installedAiEngines={availableAiEngines}
         onNewAiChat={engine => openSessionTerminal(engine)}
       />
       <div className="app-main">
@@ -621,6 +662,7 @@ export default function App() {
             <Sidebar
               activePanel={activePanel}
               onOpenWorkspace={handleOpenWorkspace}
+              onCloseWorkspace={ws => closeOrRemoveWorkspace(ws, false)}
               explorerActionsRef={explorerActionsRef}
               dbActionsRef={dbActionsRef}
               onOpenSessionTerminal={openSessionTerminal}
@@ -629,7 +671,7 @@ export default function App() {
           </div>
 
           <div className="editor-area">
-            <EditorPane onOpenWorkspace={handleOpenWorkspace} />
+            <EditorPane onOpenWorkspace={handleOpenWorkspace} onRemoveWorkspace={ws => closeOrRemoveWorkspace(ws, true)} />
 
             {showTerminal && bottomTermCount > 0 && (
               <div className="terminal-resize-h" onMouseDown={handleTerminalResize} />

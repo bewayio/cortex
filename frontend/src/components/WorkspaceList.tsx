@@ -2,24 +2,30 @@ import React, { useRef, useState } from 'react'
 import { FolderOpen, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore } from '../stores/workspaceStore'
-import {
-  OpenDirectoryDialog, RemoveWorkspace, CloseWorkspace, ReorderRecentWorkspaces,
-  GetRecentWorkspaces, GetEverOpenedWorkspaces,
-} from '../../wailsjs/go/main/App'
+import { OpenDirectoryDialog, ReorderRecentWorkspaces } from '../../wailsjs/go/main/App'
+import type { Workspace } from '../types'
 
 interface Props {
   onOpenWorkspace: (path: string) => void
+  // Fecha ("open") ou remove permanentemente ("everOpened") um workspace —
+  // mata os terminais dele e chama o backend certo (CloseWorkspace/
+  // RemoveWorkspace); App.tsx é quem decide qual, já que só ele tem acesso
+  // ao terminalActionsRef e ao currentWorkspace pra navegação. Ver
+  // .specs/tasks/terminal-process-cleanup.md. Opcional: 'everOpened' sem
+  // callback (não deveria acontecer, mas não quebra — só não remove nada).
+  onCloseWorkspace?: (ws: Workspace) => void
+  onRemoveWorkspace?: (ws: Workspace) => void
   // 'open' (default): "Open projects", capped 8, above the file explorer.
   // 'everOpened': "Ever opened", capped 15, on the Home tab. Same component,
   // different data source and label — see .specs/modules/workspace.md.
   source?: 'open' | 'everOpened'
 }
 
-export default function WorkspaceList({ onOpenWorkspace, source = 'open' }: Props) {
+export default function WorkspaceList({ onOpenWorkspace, onCloseWorkspace, onRemoveWorkspace, source = 'open' }: Props) {
   const { t } = useTranslation('shell')
   const {
     recentWorkspaces, setRecentWorkspaces,
-    everOpenedWorkspaces, setEverOpenedWorkspaces,
+    everOpenedWorkspaces,
     currentWorkspace,
   } = useWorkspaceStore()
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null)
@@ -33,15 +39,6 @@ export default function WorkspaceList({ onOpenWorkspace, source = 'open' }: Prop
 
   const list = source === 'everOpened' ? everOpenedWorkspaces : recentWorkspaces
   const label = source === 'everOpened' ? t('workspaceList.everOpened') : t('workspaceList.openProjects')
-
-  const refreshLists = async () => {
-    const [recent, everOpened] = await Promise.all([
-      GetRecentWorkspaces().catch(() => []),
-      GetEverOpenedWorkspaces().catch(() => []),
-    ])
-    setRecentWorkspaces(recent)
-    setEverOpenedWorkspaces(everOpened)
-  }
 
   const handleOpen = async () => {
     try {
@@ -105,14 +102,15 @@ export default function WorkspaceList({ onOpenWorkspace, source = 'open' }: Prop
   // bug relatado pelo usuário (2026-09-27): parecia que as duas listas eram
   // uma coisa só.
   const handleRemove = async (id: string) => {
+    const ws = list.find(w => w.id === id)
+    setContextMenu(null)
+    if (!ws) return
     try {
-      if (source === 'everOpened') await RemoveWorkspace(id)
-      else await CloseWorkspace(id)
-      await refreshLists()
+      if (source === 'everOpened') await onRemoveWorkspace?.(ws)
+      else await onCloseWorkspace?.(ws)
     } catch (err) {
       console.error(err)
     }
-    setContextMenu(null)
   }
 
   return (
