@@ -2,8 +2,8 @@
 bsdd_version: "1.0"
 document_type: source
 domain: tasks
-last_updated: 2026-09-27
-version: 1
+last_updated: 2026-10-24
+version: 2
 connections:
   parent: .specs/project/project-dna.md
   children: []
@@ -14,7 +14,9 @@ connections:
     - Linked spec changes
 ---
 
-# Task: Git-init this project into bewayio/code, a versioned release pipeline to bewayio/homebrew-bcode, and its Homebrew cask
+# Task: Git-init this project and create its release pipeline
+
+> Historical plan: the two-repository/Homebrew design below was superseded on 2026-10-24 at the user's request. The current workflow publishes releases to `bewayio/cortex` with `GITHUB_TOKEN` and `contents:write`, and no longer updates the external Homebrew tap. See `.specs/modules/release.md` for the current behavior.
 
 ## Status
 

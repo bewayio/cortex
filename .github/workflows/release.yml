@@ -3,20 +3,11 @@ name: Release
 # Builds native macOS/Linux/Windows binaries on every push to main, invents
 # a version number itself (BASE_VERSION below + this run's number — no
 # manual tagging needed here), and publishes them as a new, permanently
-# versioned GitHub Release + git tag on the public bewayio/homebrew-bcode
-# repo (with a checksums.txt, sha256 per asset). It then updates that repo's
-# Casks/bcode.rb (version + sha256) automatically — no manual cask edit
-# needed after a release either. See .specs/modules/release.md.
+# versioned GitHub Release + git tag in this repository (with a
+# checksums.txt, sha256 per asset). See .specs/modules/release.md.
 #
 # To bump the major/minor version, edit BASE_VERSION below — the patch
 # number (this workflow's run number) always increases on its own.
-#
-# Requires a repo secret BCODE_RELEASE_TOKEN: a fine-grained GitHub PAT
-# scoped to `contents:write` on bewayio/homebrew-bcode only. Create it under
-# https://github.com/settings/tokens and add it under this repo's
-# Settings > Secrets and variables > Actions. Not something this workflow
-# (or the assistant that wrote it) creates on its own.
-
 on:
   push:
     branches: [main]
@@ -254,7 +245,7 @@ jobs:
         run: cp build/appicon.png cortex-icon.png
 
       # One sha256 file per asset — the publish job bundles these into a
-      # single checksums.txt, and the cask formula pins these exact values.
+      # single checksums.txt for the release assets.
       - name: Checksum (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: shasum -a 256 ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
@@ -286,6 +277,8 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -295,7 +288,7 @@ jobs:
       - name: Combine checksums
         run: cat artifacts/*.sha256 > artifacts/checksums.txt
 
-      # No tag is pushed here in bewayio/code — the version is invented by
+      # No tag is pushed manually — the version is invented by
       # this workflow itself (BASE_VERSION + this run's own number, which
       # only ever increases), so every push to main gets its own permanent,
       # correctly versioned release without the user tagging anything.
@@ -304,40 +297,18 @@ jobs:
         run: echo "value=${BASE_VERSION}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       # Versioned release (one per push), not a rolling "latest" — the
-      # Homebrew cask needs a stable version + sha256 pair per release.
-      # Cross-repo via owner/repo, so this needs BCODE_RELEASE_TOKEN (see
-      # the note at the top of this file) instead of the default
-      # GITHUB_TOKEN, which only has access to this repo.
-      - name: Publish release to bewayio/homebrew-bcode
+      # The publish job's contents:write permission lets GITHUB_TOKEN create
+      # the tag and release in this repository.
+      - name: Publish release to this repository
         uses: ncipollo/release-action@v1
         with:
           owner: bewayio
-          repo: homebrew-bcode
-          token: ${{ secrets.BCODE_RELEASE_TOKEN }}
+          repo: cortex
+          token: ${{ github.token }}
           tag: v${{ steps.version.outputs.value }}
           name: v${{ steps.version.outputs.value }}
           body: >-
-            Automated build from bewayio/code@${{ github.sha }}.
+            Automated build from ${{ github.repository }}@${{ github.sha }}.
             Unsigned binaries — macOS Gatekeeper and Windows SmartScreen
             may warn on first launch.
           artifacts: artifacts/*
-
-      # Keeps Casks/bcode.rb in sync automatically — no manual version/sha256
-      # bump needed after each release. Same token as the publish step above,
-      # since it already has contents:write on this repo.
-      - name: Update Homebrew cask
-        env:
-          BCODE_RELEASE_TOKEN: ${{ secrets.BCODE_RELEASE_TOKEN }}
-          VERSION: ${{ steps.version.outputs.value }}
-        run: |
-          SHA256=$(grep "cortex-macos-universal.zip" artifacts/checksums.txt | awk '{print $1}')
-
-          git clone "https://x-access-token:${BCODE_RELEASE_TOKEN}@github.com/bewayio/homebrew-bcode.git" tap
-          cd tap
-          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/bcode.rb
-          sed -i "s/sha256 \".*\"/sha256 \"${SHA256}\"/" Casks/bcode.rb
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/bcode.rb
-          git commit -m "bcode ${VERSION}"
-          git push

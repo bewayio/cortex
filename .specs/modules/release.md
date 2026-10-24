@@ -18,12 +18,12 @@ connections:
 
 ## Purpose
 
-Build BCode's desktop binaries for macOS, Linux and Windows via GitHub Actions, and publish them to a public release repository so they're ready for distribution (starting with a future Homebrew cask, later other package managers).
+Build Cortex desktop binaries for macOS, Linux and Windows via GitHub Actions, and publish versioned GitHub Releases with checksums in this repository.
 
 ## Boundaries
 
-- Owns: `.github/workflows/release.yml` (and any small helper scripts it needs), the versioned GitHub Releases on the public `bewayio/homebrew-bcode` repo, and (once set up) that repo's `Casks/bcode.rb` Homebrew cask formula.
-- Does NOT own: application runtime behavior (every other module above), the actual Homebrew cask formula or any other package-manager packaging (future work, not part of this module yet), code signing/notarization (not attempted — binaries ship unsigned for now).
+- Owns: `.github/workflows/release.yml` (and any small helper scripts it needs) and the versioned GitHub Releases in `bewayio/cortex`.
+- Does NOT own: application runtime behavior (every other module above), package-manager packaging, code signing/notarization (not attempted — binaries ship unsigned for now).
 
 ## Public Interface
 
@@ -31,7 +31,7 @@ None — this is a CI/CD pipeline (GitHub Actions), not a runtime API. It has no
 
 ## Events Published
 
-None (in the Wails-event sense). Externally, a successful run updates the `bewayio/bcode` GitHub Release — not something the running app itself observes or reacts to.
+None (in the Wails-event sense). Externally, a successful run creates a GitHub Release in `bewayio/cortex` — not something the running app itself observes or reacts to.
 
 ## Events Consumed
 
@@ -44,21 +44,23 @@ None.
 | GitHub Actions | external service | workflow YAML in `.github/workflows/` |
 | Wails CLI | build tool | `wails build`, version pinned to match `go.mod`'s `github.com/wailsapp/wails/v2` |
 | linuxdeploy (+ AppImage runtime) | build tool, Linux job only | bundles the Linux binary and its shared-library closure (incl. `libwebkit2gtk-4.0`) into one AppImage |
-| Cross-repo publish credential | external, user-provisioned secret | a fine-grained PAT (or equivalent) with write access to `bewayio/bcode` only, stored as a GitHub Actions secret in `bewayio/code` |
+| GitHub Actions token | GitHub-provided credential | `GITHUB_TOKEN` with `contents:write` on the publish job, to create the tag and release in this repository |
 
 ## Areas
 
 | Area | Permission Level |
 |------|-----------------|
-| CI/CD (GitHub Actions) | maintainer-only — triggered by pushes to the private `bewayio/code` repo, publishes to the public `bewayio/bcode` repo |
+| CI/CD (GitHub Actions) | maintainer-only — triggered by pushes to `main` in `bewayio/cortex`, publishes releases in the same repository |
 
 ## Security
 
-- The cross-repo publish credential must be scoped as narrowly as possible (write access to `bewayio/homebrew-bcode` only, not org-wide) and stored only as a GitHub Actions secret — never committed, never handled by an assistant on the user's behalf.
+- The publish job grants only `contents:write`, which `GITHUB_TOKEN` needs to create a tag and release in this repository. No personal access token or repository secret is required.
 - No application secrets (DB passwords, the local encryption key from ADR-0009, chat history, etc.) are involved in or exposed by this pipeline — it only ever touches build inputs (source code) and build outputs (binaries).
-- `bewayio/code` (source) stays private; `bewayio/homebrew-bcode` (binaries + cask) stays public and should never receive source code, only release assets and the cask formula itself.
+- Release assets are published alongside the source in `bewayio/cortex`; repository visibility determines who can access them.
 
 ## Notes
+
+- **Updated 2026-10-24, user request**: release assets and tags are now created in `bewayio/cortex` using the workflow's `GITHUB_TOKEN` and `contents:write` permission. The cross-repository Homebrew cask update was removed; no `BCODE_RELEASE_TOKEN` secret is needed.
 
 - **Planned 2026-09-27, user request.** Two-repo split, both already existing as empty/unrelated-content GitHub repos at the time of this spec: `bewayio/code` (private) becomes this project's actual source repo — **this working directory has no `.git` at all yet**; the public releases repo was described as intentionally "clean," ready for a Homebrew cask and, later, other Linux/Windows package managers (the latter still future work; the cask itself is now in scope, see below).
 - **Repo renamed to `homebrew-bcode`, same day, user follow-up.** Homebrew's tap-shorthand convention (`brew tap bewayio/bcode`) requires the underlying GitHub repo to be named `homebrew-<tap-name>` — a plain `bcode` repo would only work via the full-URL tap syntax. The user is renaming `bewayio/bcode` → `bewayio/homebrew-bcode` on GitHub; every reference in this module and its task/workflow uses the new name.
